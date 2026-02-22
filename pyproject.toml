@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mjlabcpu"
+version = "0.1.0"
+description = "Isaac Lab manager-based API with standard CPU MuJoCo and JAX JIT"
+requires-python = ">=3.10"
+dependencies = [
+    "mujoco>=3.2.0",
+    "jax[cpu]>=0.4.20",
+    "numpy>=1.26.0",
+    "gymnasium>=0.29.0",
+    "prettytable>=3.9.0",
+    "flax>=0.8.0",
+    "optax>=0.2.0",
+]
+
+[project.optional-dependencies]
+mjx = ["mujoco-mjx>=3.2.0"]
+train = ["wandb>=0.17.0"]
+viz = ["rerun-sdk>=0.20"]
+photo = []  # requires system Blender: https://www.blender.org/download/
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.4.0",
+    "pyright>=1.1.360",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mjlabcpu"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"

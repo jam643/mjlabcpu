@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# uv
+.uv/
+
+# Pytest
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Checkpoints
+checkpoints/
+
+# Large binary mesh assets (downloaded separately via download_panda_assets.py)
+examples/assets/panda_push/assets/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Training artifacts
+runs/
+wandb/
+
+# macOS
+.DS_Store
