@@ -81,7 +81,7 @@ def extract_state_mjx(
 
 
 def extract_state(
-    sim: "Simulation",
+    sim: Simulation,
     action: jnp.ndarray,
     prev_action: jnp.ndarray,
     episode_length: jnp.ndarray,

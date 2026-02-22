@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any
 
 import gymnasium as gym
 import jax.numpy as jnp
@@ -260,9 +259,8 @@ class ManagerBasedRlEnv(gym.Env):
         if self.render_mode == "human":
             if self._viewer is None:
                 from mujoco import viewer as _mjviewer
-                self._viewer = _mjviewer.launch_passive(
-                    self._sim.model, self._sim.data[0]
-                )
+
+                self._viewer = _mjviewer.launch_passive(self._sim.model, self._sim.data[0])
             if self._viewer.is_running():
                 with self._viewer.lock():
                     self._viewer.sync()
@@ -333,9 +331,7 @@ class ManagerBasedRlEnv(gym.Env):
         obs_dict = self._obs_manager.compute(dummy_state)
         obs = self._flatten_obs(obs_dict)
         obs_dim = obs.shape[-1]
-        return gym.spaces.Box(
-            low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32
-        )
+        return gym.spaces.Box(low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32)
 
     def _make_dummy_state(self) -> SimState:
         """Create a dummy SimState for shape inference."""

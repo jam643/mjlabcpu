@@ -54,16 +54,13 @@ class PPOCfg:
 # Helper: Gaussian log-prob and entropy
 # ---------------------------------------------------------------------------
 
+
 def _gaussian_log_prob(
     actions: jnp.ndarray, mean: jnp.ndarray, log_std: jnp.ndarray
 ) -> jnp.ndarray:
     """Log-prob of ``actions`` under N(mean, exp(log_std)^2). Returns (batch,)."""
     std = jnp.exp(log_std)
-    log_prob = -0.5 * (
-        ((actions - mean) / (std + 1e-8)) ** 2
-        + 2 * log_std
-        + jnp.log(2 * jnp.pi)
-    )
+    log_prob = -0.5 * (((actions - mean) / (std + 1e-8)) ** 2 + 2 * log_std + jnp.log(2 * jnp.pi))
     return log_prob.sum(axis=-1)
 
 
@@ -79,6 +76,7 @@ def _gaussian_entropy(log_std: jnp.ndarray) -> jnp.ndarray:
 # ---------------------------------------------------------------------------
 # PPO update step (JIT-compiled)
 # ---------------------------------------------------------------------------
+
 
 @jax.jit
 def _ppo_update_step(
@@ -121,9 +119,7 @@ def _ppo_update_step(
 
         # Value loss — clipped to prevent critic from diverging
         v_clipped = old_values + jnp.clip(values - old_values, -clip_coef, clip_coef)
-        v_loss = 0.5 * jnp.maximum(
-            (values - returns) ** 2, (v_clipped - returns) ** 2
-        ).mean()
+        v_loss = 0.5 * jnp.maximum((values - returns) ** 2, (v_clipped - returns) ** 2).mean()
 
         total_loss = pg_loss + vf_coef * v_loss - ent_coef * entropy
         return total_loss, {"pg_loss": pg_loss, "v_loss": v_loss, "entropy": entropy}
@@ -136,6 +132,7 @@ def _ppo_update_step(
 # ---------------------------------------------------------------------------
 # PPOTrainer
 # ---------------------------------------------------------------------------
+
 
 class PPOTrainer:
     """Minimal pure-JAX PPO trainer for mjlabcpu gymnasium environments.
@@ -205,6 +202,7 @@ class PPOTrainer:
         if cfg.wandb_project is not None:
             try:
                 import wandb
+
                 wandb.init(
                     project=cfg.wandb_project,
                     name=cfg.wandb_run_name,
@@ -314,13 +312,16 @@ class PPOTrainer:
                 metrics_history["mean_reward"].append(mean_rew)
 
                 if self._wandb is not None:
-                    self._wandb.log({
-                        "train/reward_mean": mean_rew,
-                        "train/pg_loss": mean_pg,
-                        "train/value_loss": mean_v,
-                        "train/entropy": mean_ent,
-                        "train/steps_per_sec": sps,
-                    }, step=global_step)
+                    self._wandb.log(
+                        {
+                            "train/reward_mean": mean_rew,
+                            "train/pg_loss": mean_pg,
+                            "train/value_loss": mean_v,
+                            "train/entropy": mean_ent,
+                            "train/steps_per_sec": sps,
+                        },
+                        step=global_step,
+                    )
 
                 print(
                     f"update={update:4d}  "
@@ -340,6 +341,7 @@ class PPOTrainer:
     def save(self, path: str) -> None:
         """Save network parameters to a pickle file."""
         import os
+
         os.makedirs(os.path.dirname(path) if os.path.dirname(path) else ".", exist_ok=True)
         with open(path, "wb") as f:
             pickle.dump(
@@ -382,9 +384,7 @@ class PPOTrainer:
     # Internal
     # ------------------------------------------------------------------
 
-    def _collect_rollout(
-        self, obs: np.ndarray
-    ) -> tuple[RolloutBuffer, np.ndarray, list[float]]:
+    def _collect_rollout(self, obs: np.ndarray) -> tuple[RolloutBuffer, np.ndarray, list[float]]:
         """Step the env ``num_steps`` times and collect trajectory data."""
         cfg = self.cfg
         T = cfg.num_steps
@@ -404,9 +404,7 @@ class PPOTrainer:
 
         for t in range(T):
             obs_jax = jnp.asarray(obs, dtype=jnp.float32)
-            actions, log_probs, values, key = self._jit_act(
-                self._state.params, obs_jax, key
-            )
+            actions, log_probs, values, key = self._jit_act(self._state.params, obs_jax, key)
 
             obs_buf[t] = obs
             act_buf[t] = np.array(actions)
@@ -427,9 +425,7 @@ class PPOTrainer:
 
         # Bootstrap last value
         last_obs_jax = jnp.asarray(obs, dtype=jnp.float32)
-        _, _, last_value, _ = self._jit_act(
-            self._state.params, last_obs_jax, key
-        )
+        _, _, last_value, _ = self._jit_act(self._state.params, last_obs_jax, key)
         last_value_np = np.array(last_value)
 
         # GAE

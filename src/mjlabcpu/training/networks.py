@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import flax.linen as nn
 import jax.numpy as jnp
@@ -35,12 +35,8 @@ class ActorCritic(nn.Module):
     action_dim: int
 
     @nn.compact
-    def __call__(
-        self, obs: jnp.ndarray
-    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    def __call__(self, obs: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         actor_mean = MLP(self.hidden_sizes, self.action_dim)(obs)
-        log_std = self.param(
-            "log_std", nn.initializers.zeros, (self.action_dim,)
-        )
+        log_std = self.param("log_std", nn.initializers.zeros, (self.action_dim,))
         value = MLP(self.hidden_sizes, 1)(obs).squeeze(-1)
         return actor_mean, log_std, value

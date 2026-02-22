@@ -7,7 +7,6 @@ import time
 
 import jax.numpy as jnp
 import numpy as np
-import pytest
 
 ASSET_PATH = os.path.join(os.path.dirname(__file__), "..", "examples", "assets", "cartpole.xml")
 NUM_ENVS = 64  # Large enough to show MJX batching advantage
@@ -50,14 +49,22 @@ def _make_env(num_envs: int, backend: str, render_mode=None):
         episode_length_s=10.0,
         decimation=4,
         observations={
-            "policy": ObservationGroupCfg(terms={
-                "joint_pos": ObservationTermCfg(func=obs_mdp.joint_pos_rel, params={"entity_cfg": entity_cfg}),
-                "joint_vel": ObservationTermCfg(func=obs_mdp.joint_vel_rel, params={"entity_cfg": entity_cfg}),
-            })
+            "policy": ObservationGroupCfg(
+                terms={
+                    "joint_pos": ObservationTermCfg(
+                        func=obs_mdp.joint_pos_rel, params={"entity_cfg": entity_cfg}
+                    ),
+                    "joint_vel": ObservationTermCfg(
+                        func=obs_mdp.joint_vel_rel, params={"entity_cfg": entity_cfg}
+                    ),
+                }
+            )
         },
         rewards={
             "alive": RewardTermCfg(func=rew_mdp.is_alive, weight=1.0),
-            "upright": RewardTermCfg(func=rew_mdp.cartpole_upright, params={"entity_cfg": entity_cfg}, weight=2.0),
+            "upright": RewardTermCfg(
+                func=rew_mdp.cartpole_upright, params={"entity_cfg": entity_cfg}, weight=2.0
+            ),
             "action_penalty": RewardTermCfg(func=rew_mdp.action_rate_l2, weight=-0.01),
         },
         terminations={
@@ -80,7 +87,11 @@ def _make_env(num_envs: int, backend: str, render_mode=None):
             "reset_cartpole": EventTermCfg(
                 func=event_mdp.reset_joints_uniform,
                 mode="reset",
-                params={"entity_name": "cartpole", "position_range": (-0.1, 0.1), "velocity_range": (-0.1, 0.1)},
+                params={
+                    "entity_name": "cartpole",
+                    "position_range": (-0.1, 0.1),
+                    "velocity_range": (-0.1, 0.1),
+                },
             ),
         },
     )
@@ -91,9 +102,11 @@ def _make_env(num_envs: int, backend: str, render_mode=None):
 
     if backend == "cpu":
         from mjlabcpu.envs import ManagerBasedRlEnv
+
         return ManagerBasedRlEnv(cfg, render_mode=render_mode)
     elif backend == "mjx":
         from mjlabcpu.envs.mjx_env import MjxManagerBasedRlEnv
+
         return MjxManagerBasedRlEnv(cfg, render_mode=render_mode)
     else:
         raise ValueError(f"Unknown backend: {backend!r}")
@@ -206,16 +219,19 @@ def test_mjx_obs_matches_cpu():
     """
     N = 1
 
-    from mjlabcpu.envs.mdp import events as event_mdp
-    from mjlabcpu.envs.manager_based_rl_env import ManagerBasedRlEnvCfg
     from mjlabcpu.entity import EntityCfg
+    from mjlabcpu.envs.manager_based_rl_env import ManagerBasedRlEnvCfg
     from mjlabcpu.envs.mdp import observations as obs_mdp
     from mjlabcpu.envs.mdp import rewards as rew_mdp
     from mjlabcpu.envs.mdp import terminations as term_mdp
     from mjlabcpu.envs.mdp.actions import JointPositionAction
     from mjlabcpu.managers import (
-        ActionTermCfg, ObservationGroupCfg, ObservationTermCfg,
-        RewardTermCfg, SceneEntityCfg, TerminationTermCfg,
+        ActionTermCfg,
+        ObservationGroupCfg,
+        ObservationTermCfg,
+        RewardTermCfg,
+        SceneEntityCfg,
+        TerminationTermCfg,
     )
     from mjlabcpu.scene import SceneCfg
     from mjlabcpu.sim import SimulationCfg
@@ -223,21 +239,38 @@ def test_mjx_obs_matches_cpu():
     entity_cfg = SceneEntityCfg(name="cartpole")
     # No events (no randomisation) so both start from exact same state
     cfg = ManagerBasedRlEnvCfg(
-        scene=SceneCfg(num_envs=N, ground_plane=True,
-                       entities={"cartpole": EntityCfg(prim_path="cartpole", spawn=ASSET_PATH)}),
+        scene=SceneCfg(
+            num_envs=N,
+            ground_plane=True,
+            entities={"cartpole": EntityCfg(prim_path="cartpole", spawn=ASSET_PATH)},
+        ),
         sim=SimulationCfg(dt=0.002),
         episode_length_s=10.0,
         decimation=4,
-        observations={"policy": ObservationGroupCfg(terms={
-            "joint_pos": ObservationTermCfg(func=obs_mdp.joint_pos_rel, params={"entity_cfg": entity_cfg}),
-            "joint_vel": ObservationTermCfg(func=obs_mdp.joint_vel_rel, params={"entity_cfg": entity_cfg}),
-        })},
+        observations={
+            "policy": ObservationGroupCfg(
+                terms={
+                    "joint_pos": ObservationTermCfg(
+                        func=obs_mdp.joint_pos_rel, params={"entity_cfg": entity_cfg}
+                    ),
+                    "joint_vel": ObservationTermCfg(
+                        func=obs_mdp.joint_vel_rel, params={"entity_cfg": entity_cfg}
+                    ),
+                }
+            )
+        },
         rewards={"alive": RewardTermCfg(func=rew_mdp.is_alive, weight=1.0)},
-        terminations={"time_out": TerminationTermCfg(
-            func=term_mdp.time_out, params={"max_episode_length": 1250}, time_out=True)},
-        actions={"cart_drive": ActionTermCfg(
-            cls=JointPositionAction,
-            params={"entity_cfg": entity_cfg, "scale": 1.0, "use_default_offset": False})},
+        terminations={
+            "time_out": TerminationTermCfg(
+                func=term_mdp.time_out, params={"max_episode_length": 1250}, time_out=True
+            )
+        },
+        actions={
+            "cart_drive": ActionTermCfg(
+                cls=JointPositionAction,
+                params={"entity_cfg": entity_cfg, "scale": 1.0, "use_default_offset": False},
+            )
+        },
         events={},  # no randomisation
     )
 

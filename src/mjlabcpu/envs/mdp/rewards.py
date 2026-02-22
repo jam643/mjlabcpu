@@ -12,7 +12,6 @@ from mjlabcpu.managers.scene_entity_cfg import ResolvedEntityCfg
 from mjlabcpu.sim.sim_state import SimState
 from mjlabcpu.utils.math import quat_rotate_inverse
 
-
 # ---------------------------------------------------------------------------
 # Survival / existence rewards
 # ---------------------------------------------------------------------------
@@ -113,7 +112,10 @@ def joint_pos_deviation(state: SimState, entity_cfg: ResolvedEntityCfg) -> jnp.n
 
 
 def upright(state: SimState, entity_cfg: ResolvedEntityCfg) -> jnp.ndarray:
-    """Reward for keeping the root body upright (z-axis aligned with world z). Shape: (num_envs,)."""
+    """Reward for keeping the root body upright (z-axis aligned with world z).
+
+    Shape: (num_envs,).
+    """
     root_id = entity_cfg.root_body_id
     quat_w = state.xquat[:, root_id, :]
     # Project world up-vector [0,0,1] into body frame

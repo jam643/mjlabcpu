@@ -2,8 +2,6 @@
 
 from mjlabcpu.envs.manager_based_rl_env import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
 from mjlabcpu.envs.mjx_env import MjxManagerBasedRlEnv
-from mjlabcpu.sim.mjx_sim import MjxSimulation
-from mjlabcpu.training import PPOCfg, PPOTrainer, RolloutBuffer
 from mjlabcpu.managers import (
     ActionManager,
     ActionTerm,
@@ -24,7 +22,9 @@ from mjlabcpu.managers import (
     UniformVelocityCommandCfg,
 )
 from mjlabcpu.scene import Scene, SceneCfg
-from mjlabcpu.sim import MujocoCfg, Simulation, SimulationCfg, SimState, extract_state
+from mjlabcpu.sim import MujocoCfg, SimState, Simulation, SimulationCfg, extract_state
+from mjlabcpu.sim.mjx_sim import MjxSimulation
+from mjlabcpu.training import PPOCfg, PPOTrainer, RolloutBuffer
 
 __version__ = "0.1.0"
 

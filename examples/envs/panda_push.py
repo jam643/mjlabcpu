@@ -6,7 +6,6 @@ Prerequisites:
 
 from __future__ import annotations
 
-import os
 import pathlib
 import sys
 
@@ -16,20 +15,19 @@ PUCK_XML = ASSET_DIR / "puck.xml"
 
 if not PANDA_XML.exists():
     print(
-        "Panda assets not found. Run:\n"
-        "    uv run python examples/download_panda_assets.py",
+        "Panda assets not found. Run:\n    uv run python examples/download_panda_assets.py",
         file=sys.stderr,
     )
     sys.exit(1)
 
-from mjlabcpu.entity import EntityCfg
-from mjlabcpu.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
-from mjlabcpu.envs.mdp import events as event_mdp
-from mjlabcpu.envs.mdp import observations as obs_mdp
-from mjlabcpu.envs.mdp import rewards as rew_mdp
-from mjlabcpu.envs.mdp import terminations as term_mdp
-from mjlabcpu.envs.mdp.actions import JointPositionAction
-from mjlabcpu.managers import (
+from mjlabcpu.entity import EntityCfg  # noqa: E402
+from mjlabcpu.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg  # noqa: E402
+from mjlabcpu.envs.mdp import events as event_mdp  # noqa: E402
+from mjlabcpu.envs.mdp import observations as obs_mdp  # noqa: E402
+from mjlabcpu.envs.mdp import rewards as rew_mdp  # noqa: E402
+from mjlabcpu.envs.mdp import terminations as term_mdp  # noqa: E402
+from mjlabcpu.envs.mdp.actions import JointPositionAction  # noqa: E402
+from mjlabcpu.managers import (  # noqa: E402
     ActionTermCfg,
     EventTermCfg,
     GoalPositionCommandCfg,
@@ -39,9 +37,9 @@ from mjlabcpu.managers import (
     SceneEntityCfg,
     TerminationTermCfg,
 )
-from mjlabcpu.scene import SceneCfg
-from mjlabcpu.sim import SimulationCfg
-from mjlabcpu.training import PPOCfg
+from mjlabcpu.scene import SceneCfg  # noqa: E402
+from mjlabcpu.sim import SimulationCfg  # noqa: E402
+from mjlabcpu.training import PPOCfg  # noqa: E402
 
 DT = 0.002
 DECIMATION = 4

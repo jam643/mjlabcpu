@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 def reset_scene_to_default(
-    env: "ManagerBasedRlEnv",
+    env: ManagerBasedRlEnv,
     env_ids: list[int],
 ) -> None:
     """Reset selected environments to the model's default state (mj_resetData)."""
@@ -25,7 +25,7 @@ def reset_scene_to_default(
 
 
 def reset_root_state_uniform(
-    env: "ManagerBasedRlEnv",
+    env: ManagerBasedRlEnv,
     env_ids: list[int],
     entity_name: str,
     pose_range: dict[str, tuple[float, float]] | None = None,
@@ -87,7 +87,7 @@ def reset_root_state_uniform(
 
 
 def reset_joints_uniform(
-    env: "ManagerBasedRlEnv",
+    env: ManagerBasedRlEnv,
     env_ids: list[int],
     entity_name: str,
     position_range: tuple[float, float] = (-0.1, 0.1),

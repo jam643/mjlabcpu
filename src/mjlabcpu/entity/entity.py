@@ -10,7 +10,7 @@ import mujoco
 import numpy as np
 
 if TYPE_CHECKING:
-    from mjlabcpu.scene.scene import Scene
+    pass
 
 
 @dataclasses.dataclass
@@ -27,7 +27,7 @@ class EntityCfg:
     """Unique identifier / spawn path (becomes the MjSpec prefix)."""
     spawn: str | None = None
     """Path to the MJCF XML for this entity. If None, entity is defined inline."""
-    init_state: "InitState | None" = None
+    init_state: InitState | None = None
     """Initial state (joint positions, root pose, etc.)."""
 
 
@@ -164,9 +164,7 @@ class Entity:
             default_qpos=jnp.array(
                 default_qpos_full[qpos_addrs] if qpos_addrs else np.zeros(0), dtype=jnp.float32
             ),
-            default_qvel=jnp.array(
-                np.zeros(len(qvel_addrs)), dtype=jnp.float32
-            ),
+            default_qvel=jnp.array(np.zeros(len(qvel_addrs)), dtype=jnp.float32),
         )
 
     @property

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 from typing import Any
 
 import gymnasium as gym
@@ -13,12 +12,12 @@ import numpy as np
 from mujoco import mjx
 
 from mjlabcpu.envs.manager_based_rl_env import ManagerBasedRlEnvCfg
-from mjlabcpu.managers.action_manager import ActionManager, ActionTermCfg
-from mjlabcpu.managers.command_manager import CommandManager, UniformVelocityCommandCfg
+from mjlabcpu.managers.action_manager import ActionManager
+from mjlabcpu.managers.command_manager import CommandManager
 from mjlabcpu.managers.event_manager import EventManager, EventTermCfg
-from mjlabcpu.managers.observation_manager import ObservationGroupCfg, ObservationManager
-from mjlabcpu.managers.reward_manager import RewardManager, RewardTermCfg
-from mjlabcpu.managers.termination_manager import TerminationManager, TerminationTermCfg
+from mjlabcpu.managers.observation_manager import ObservationManager
+from mjlabcpu.managers.reward_manager import RewardManager
+from mjlabcpu.managers.termination_manager import TerminationManager
 from mjlabcpu.scene.scene import Scene
 from mjlabcpu.sim.mjx_sim import MjxSimulation
 from mjlabcpu.sim.sim_state import SimState, extract_state_mjx
@@ -48,9 +47,7 @@ class MjxManagerBasedRlEnv(gym.Env):
 
     metadata = {"render_modes": ["rgb_array"]}
 
-    def __init__(
-        self, cfg: ManagerBasedRlEnvCfg, render_mode: str | None = None
-    ) -> None:
+    def __init__(self, cfg: ManagerBasedRlEnvCfg, render_mode: str | None = None) -> None:
         self.cfg = cfg
         self.render_mode = render_mode
         self._renderer = None
@@ -265,15 +262,11 @@ class MjxManagerBasedRlEnv(gym.Env):
 
                 return jax.vmap(step_env)(data, ctrl), None
 
-            mjx_data, _ = jax.lax.scan(
-                phys_step, mjx_data, None, length=decimation
-            )
+            mjx_data, _ = jax.lax.scan(phys_step, mjx_data, None, length=decimation)
 
             # 3. State extraction — zero-copy from JAX pytree
             episode_length = episode_length + 1
-            state = extract_state_mjx(
-                mjx_data, action, prev_action, episode_length, commands
-            )
+            state = extract_state_mjx(mjx_data, action, prev_action, episode_length, commands)
 
             # 4. Obs / reward / done (manager JIT fns inline into this kernel)
             obs_dict = obs_fn(state)
@@ -326,9 +319,7 @@ class MjxManagerBasedRlEnv(gym.Env):
         state = self._extract_state_now()
         obs_dict = self._obs_manager.compute(state)
         obs = self._flatten_obs_jax(obs_dict)
-        return gym.spaces.Box(
-            low=-np.inf, high=np.inf, shape=(obs.shape[-1],), dtype=np.float32
-        )
+        return gym.spaces.Box(low=-np.inf, high=np.inf, shape=(obs.shape[-1],), dtype=np.float32)
 
     def _warmup(self) -> None:
         """Trigger JIT compilation before the training loop."""
@@ -352,9 +343,7 @@ class MjxManagerBasedRlEnv(gym.Env):
 # ---------------------------------------------------------------------------
 
 
-def _parse_reset_ops(
-    events_cfg: dict[str, EventTermCfg], scene: Scene
-) -> list[tuple]:
+def _parse_reset_ops(events_cfg: dict[str, EventTermCfg], scene: Scene) -> list[tuple]:
     """Extract reset parameters from event configs into concrete JAX arrays.
 
     Returns a list of ``("joints_uniform", qpos_addrs, qvel_addrs,
@@ -381,9 +370,7 @@ def _parse_reset_ops(
         qvel_addrs = jnp.asarray(np.array(entity.qvel_addrs), dtype=jnp.int32)
         default_qpos = jnp.asarray(np.array(entity.default_qpos), dtype=jnp.float32)
 
-        ops.append(
-            ("joints_uniform", qpos_addrs, qvel_addrs, default_qpos, pos_range, vel_range)
-        )
+        ops.append(("joints_uniform", qpos_addrs, qvel_addrs, default_qpos, pos_range, vel_range))
 
     return ops
 
@@ -434,12 +421,8 @@ def _conditional_reset(
         N = done.shape[0]
         nqp, nqv = qp_addrs.shape[0], qv_addrs.shape[0]
 
-        noise_pos = jax.random.uniform(
-            k1, (N, nqp), minval=pos_range[0], maxval=pos_range[1]
-        )
-        noise_vel = jax.random.uniform(
-            k2, (N, nqv), minval=vel_range[0], maxval=vel_range[1]
-        )
+        noise_pos = jax.random.uniform(k1, (N, nqp), minval=pos_range[0], maxval=pos_range[1])
+        noise_vel = jax.random.uniform(k2, (N, nqv), minval=vel_range[0], maxval=vel_range[1])
 
         # For done envs: default_qpos + noise; for non-done: keep current
         cur_qpos_at = new_qpos[:, qp_addrs]  # (N, nqp)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import dataclasses
 
-import jax
 import jax.numpy as jnp
 
 
@@ -16,14 +15,14 @@ class RolloutBuffer:
     ``advantages`` and ``returns`` are filled in by :func:`compute_gae`.
     """
 
-    obs: jnp.ndarray          # (T, num_envs, obs_dim)
-    actions: jnp.ndarray      # (T, num_envs, act_dim)
-    rewards: jnp.ndarray      # (T, num_envs)
-    dones: jnp.ndarray        # (T, num_envs)  bool
-    values: jnp.ndarray       # (T, num_envs)
-    log_probs: jnp.ndarray    # (T, num_envs)
-    advantages: jnp.ndarray   # (T, num_envs)
-    returns: jnp.ndarray      # (T, num_envs)
+    obs: jnp.ndarray  # (T, num_envs, obs_dim)
+    actions: jnp.ndarray  # (T, num_envs, act_dim)
+    rewards: jnp.ndarray  # (T, num_envs)
+    dones: jnp.ndarray  # (T, num_envs)  bool
+    values: jnp.ndarray  # (T, num_envs)
+    log_probs: jnp.ndarray  # (T, num_envs)
+    advantages: jnp.ndarray  # (T, num_envs)
+    returns: jnp.ndarray  # (T, num_envs)
 
 
 def compute_gae(

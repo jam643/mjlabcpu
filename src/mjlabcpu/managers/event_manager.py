@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from mjlabcpu.managers.manager_base import ManagerBase
 
@@ -33,19 +34,19 @@ class EventManager(ManagerBase):
     def __init__(
         self,
         cfg: dict[str, EventTermCfg],
-        env: "ManagerBasedRlEnv",
+        env: ManagerBasedRlEnv,
     ) -> None:
         super().__init__(env)
         self._cfg = cfg
 
     def apply_reset(self, env_ids: list[int]) -> None:
         """Fire all 'reset' mode events for the given env IDs."""
-        for term_name, term_cfg in self._cfg.items():
+        for _term_name, term_cfg in self._cfg.items():
             if term_cfg.mode == "reset":
                 term_cfg.func(self._env, env_ids, **term_cfg.params)
 
     def apply_interval(self, env_ids: list[int]) -> None:
         """Fire all 'interval' mode events for the given env IDs."""
-        for term_name, term_cfg in self._cfg.items():
+        for _term_name, term_cfg in self._cfg.items():
             if term_cfg.mode == "interval":
                 term_cfg.func(self._env, env_ids, **term_cfg.params)

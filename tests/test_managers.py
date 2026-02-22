@@ -4,17 +4,16 @@ from __future__ import annotations
 
 import os
 
-import jax.numpy as jnp
 import numpy as np
 import pytest
 
 from mjlabcpu.entity import EntityCfg
+from mjlabcpu.envs.manager_based_rl_env import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
+from mjlabcpu.envs.mdp import events as event_mdp
 from mjlabcpu.envs.mdp import observations as obs_mdp
 from mjlabcpu.envs.mdp import rewards as rew_mdp
 from mjlabcpu.envs.mdp import terminations as term_mdp
-from mjlabcpu.envs.mdp import events as event_mdp
 from mjlabcpu.envs.mdp.actions import JointPositionAction
-from mjlabcpu.envs.manager_based_rl_env import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
 from mjlabcpu.managers import (
     ActionTermCfg,
     EventTermCfg,
@@ -152,6 +151,7 @@ class TestTerminationManager:
     def test_time_out(self):
         """Time-out should trigger after max_episode_length steps."""
         from mjlabcpu.entity import EntityCfg
+
         entity_cfg = SceneEntityCfg(name="cartpole")
         # Use a tiny max_episode_length (5 steps) and NO fall termination
         cfg = ManagerBasedRlEnvCfg(
@@ -203,7 +203,9 @@ class TestTerminationManager:
                 truncated_any = True
                 break
         env.close()
-        assert truncated_any, "Time-out should have triggered within 20 steps (max_episode_length=5)"
+        assert truncated_any, (
+            "Time-out should have triggered within 20 steps (max_episode_length=5)"
+        )
 
     def test_fallen_terminates(self, cartpole_env):
         """Applying large forces should cause cartpole to fall and terminate."""
@@ -316,7 +318,7 @@ class TestEventManager:
         cartpole_env._episode_length = cartpole_env._episode_length.at[1].set(100)
         # Reset only env 0
         cartpole_env._reset_envs([0])
-        assert int(cartpole_env._episode_length[0]) == 0   # env 0: reset to 0
+        assert int(cartpole_env._episode_length[0]) == 0  # env 0: reset to 0
         assert int(cartpole_env._episode_length[1]) == 100  # env 1: unchanged
 
 

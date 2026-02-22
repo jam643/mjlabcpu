@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 
 import mujoco
-import numpy as np
 import pytest
 
 # Path to the cartpole asset

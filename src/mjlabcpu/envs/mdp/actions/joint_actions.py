@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
@@ -28,7 +27,7 @@ class JointPositionAction(ActionTerm):
     NOT JIT-compiled — writes to ``mjData.ctrl`` (C arrays).
     """
 
-    def __init__(self, cfg: ActionTermCfg, env: "ManagerBasedRlEnv") -> None:
+    def __init__(self, cfg: ActionTermCfg, env: ManagerBasedRlEnv) -> None:
         super().__init__(cfg, env)
         params = cfg.params
         entity_cfg: SceneEntityCfg = params.get("entity_cfg", SceneEntityCfg(name="robot"))
@@ -86,7 +85,7 @@ class JointVelocityAction(ActionTerm):
         - ``scale`` (float, default 1.0): multiplier on action.
     """
 
-    def __init__(self, cfg: ActionTermCfg, env: "ManagerBasedRlEnv") -> None:
+    def __init__(self, cfg: ActionTermCfg, env: ManagerBasedRlEnv) -> None:
         super().__init__(cfg, env)
         params = cfg.params
         entity_cfg: SceneEntityCfg = params.get("entity_cfg", SceneEntityCfg(name="robot"))

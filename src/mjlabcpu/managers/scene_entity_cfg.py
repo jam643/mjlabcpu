@@ -30,7 +30,7 @@ class SceneEntityCfg:
     body_names: list[str] | None = None
     """Whitelist of body names to include. If None, all bodies are included."""
 
-    def resolve(self, scene: "Scene") -> "ResolvedEntityCfg":
+    def resolve(self, scene: Scene) -> ResolvedEntityCfg:
         """Resolve names to JAX integer index arrays from the compiled model.
 
         Returns a :class:`ResolvedEntityCfg` with concrete ``jnp.ndarray`` indices.

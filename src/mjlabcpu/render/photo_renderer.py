@@ -27,7 +27,6 @@ import textwrap
 import mujoco
 import numpy as np
 
-
 # ---------------------------------------------------------------------------
 # Blender render-server script (runs inside Blender's bundled Python)
 # ---------------------------------------------------------------------------
@@ -286,10 +285,10 @@ class PhotoRenderer:
 
         # Temp directory for inter-process communication
         self._tmpdir = tempfile.mkdtemp(prefix="mjlab_photo_")
-        model_path        = os.path.join(self._tmpdir, "model.npz")
-        self._state_path  = os.path.join(self._tmpdir, "state.npz")
+        model_path = os.path.join(self._tmpdir, "model.npz")
+        self._state_path = os.path.join(self._tmpdir, "state.npz")
         self._output_path = os.path.join(self._tmpdir, "render.npy")
-        script_path       = os.path.join(self._tmpdir, "render_scene.py")
+        script_path = os.path.join(self._tmpdir, "render_scene.py")
 
         # Serialize model geometry once
         self._save_model(model, model_path)
@@ -302,12 +301,22 @@ class PhotoRenderer:
         cmd = [
             self._blender_exe,
             "--background",
-            "--python", script_path,
+            "--python",
+            script_path,
             "--",
-            model_path, self._state_path, self._output_path,
-            str(width), str(height), str(samples), device,
-            str(camera_pos[0]),    str(camera_pos[1]),    str(camera_pos[2]),
-            str(camera_look_at[0]), str(camera_look_at[1]), str(camera_look_at[2]),
+            model_path,
+            self._state_path,
+            self._output_path,
+            str(width),
+            str(height),
+            str(samples),
+            device,
+            str(camera_pos[0]),
+            str(camera_pos[1]),
+            str(camera_pos[2]),
+            str(camera_look_at[0]),
+            str(camera_look_at[1]),
+            str(camera_look_at[2]),
         ]
         self._proc = subprocess.Popen(
             cmd,
@@ -322,8 +331,7 @@ class PhotoRenderer:
         if line != "ready":
             self._proc.kill()
             raise RuntimeError(
-                f"Blender startup failed (got {line!r}). "
-                "Re-run with stderr visible for details."
+                f"Blender startup failed (got {line!r}). Re-run with stderr visible for details."
             )
 
     # ------------------------------------------------------------------
@@ -356,23 +364,23 @@ class PhotoRenderer:
         """Serialize model geometry to an .npz file for the Blender subprocess."""
         has_mesh = model.nmesh > 0
         kwargs: dict = dict(
-            geom_type    = model.geom_type,
-            geom_size    = model.geom_size,
-            geom_rgba    = model.geom_rgba,
-            geom_bodyid  = model.geom_bodyid,
-            geom_pos     = model.geom_pos,
-            geom_quat    = model.geom_quat,
-            geom_dataid  = model.geom_dataid,
-            has_mesh     = np.array(has_mesh),
+            geom_type=model.geom_type,
+            geom_size=model.geom_size,
+            geom_rgba=model.geom_rgba,
+            geom_bodyid=model.geom_bodyid,
+            geom_pos=model.geom_pos,
+            geom_quat=model.geom_quat,
+            geom_dataid=model.geom_dataid,
+            has_mesh=np.array(has_mesh),
         )
         if has_mesh:
             kwargs.update(
-                mesh_vert    = model.mesh_vert,
-                mesh_face    = model.mesh_face,
-                mesh_vertadr = model.mesh_vertadr,
-                mesh_vertnum = model.mesh_vertnum,
-                mesh_faceadr = model.mesh_faceadr,
-                mesh_facenum = model.mesh_facenum,
+                mesh_vert=model.mesh_vert,
+                mesh_face=model.mesh_face,
+                mesh_vertadr=model.mesh_vertadr,
+                mesh_vertnum=model.mesh_vertnum,
+                mesh_faceadr=model.mesh_faceadr,
+                mesh_facenum=model.mesh_facenum,
             )
         np.savez(path, **kwargs)
 
@@ -388,8 +396,8 @@ class PhotoRenderer:
         """
         np.savez(
             self._state_path,
-            xpos = data.xpos,   # (nbody, 3)
-            xmat = data.xmat,   # (nbody, 9) — reshaped to (nbody,3,3) in script
+            xpos=data.xpos,  # (nbody, 3)
+            xmat=data.xmat,  # (nbody, 9) — reshaped to (nbody,3,3) in script
         )
 
     def render(self) -> np.ndarray:

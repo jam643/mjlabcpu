@@ -6,7 +6,6 @@ import dataclasses
 import os
 
 import mujoco
-import numpy as np
 
 from mjlabcpu.entity.entity import Entity, EntityCfg
 
@@ -35,7 +34,10 @@ class Scene:
 
     Usage::
 
-        cfg = SceneCfg(num_envs=4, entities={"robot": EntityCfg(prim_path="robot", spawn="robot.xml")})
+        cfg = SceneCfg(
+            num_envs=4,
+            entities={"robot": EntityCfg(prim_path="robot", spawn="robot.xml")},
+        )
         scene = Scene(cfg)
         model = scene.model
     """
@@ -110,8 +112,10 @@ class Scene:
         """Get an entity by name."""
         try:
             return self._entities[name]
-        except KeyError:
-            raise KeyError(f"Entity '{name}' not found in scene. Available: {list(self._entities)}")
+        except KeyError as e:
+            raise KeyError(
+                f"Entity '{name}' not found in scene. Available: {list(self._entities)}"
+            ) from e
 
     def __contains__(self, name: str) -> bool:
         return name in self._entities

@@ -54,7 +54,7 @@ class CommandManager(ManagerBase):
     def __init__(
         self,
         cfg: dict[str, UniformVelocityCommandCfg],
-        env: "ManagerBasedRlEnv",
+        env: ManagerBasedRlEnv,
     ) -> None:
         super().__init__(env)
         self._cfg = cfg
@@ -79,39 +79,28 @@ class CommandManager(ManagerBase):
             if isinstance(cmd_cfg, UniformVelocityCommandCfg):
                 cmd = np.array(self._commands[name])
                 n = len(env_ids)
-                cmd[env_ids, 0] = np.random.uniform(
-                    cmd_cfg.lin_vel_x[0], cmd_cfg.lin_vel_x[1], n
-                )
-                cmd[env_ids, 1] = np.random.uniform(
-                    cmd_cfg.lin_vel_y[0], cmd_cfg.lin_vel_y[1], n
-                )
-                cmd[env_ids, 2] = np.random.uniform(
-                    cmd_cfg.ang_vel_z[0], cmd_cfg.ang_vel_z[1], n
-                )
+                cmd[env_ids, 0] = np.random.uniform(cmd_cfg.lin_vel_x[0], cmd_cfg.lin_vel_x[1], n)
+                cmd[env_ids, 1] = np.random.uniform(cmd_cfg.lin_vel_y[0], cmd_cfg.lin_vel_y[1], n)
+                cmd[env_ids, 2] = np.random.uniform(cmd_cfg.ang_vel_z[0], cmd_cfg.ang_vel_z[1], n)
                 self._commands[name] = jnp.array(cmd)
                 self._time_since_resample[name][env_ids] = 0.0
             elif isinstance(cmd_cfg, GoalPositionCommandCfg):
                 cmd = np.array(self._commands[name])
                 n = len(env_ids)
-                cmd[env_ids, 0] = np.random.uniform(
-                    cmd_cfg.x_range[0], cmd_cfg.x_range[1], n
-                )
-                cmd[env_ids, 1] = np.random.uniform(
-                    cmd_cfg.y_range[0], cmd_cfg.y_range[1], n
-                )
+                cmd[env_ids, 0] = np.random.uniform(cmd_cfg.x_range[0], cmd_cfg.x_range[1], n)
+                cmd[env_ids, 1] = np.random.uniform(cmd_cfg.y_range[0], cmd_cfg.y_range[1], n)
                 cmd[env_ids, 2] = cmd_cfg.z
                 self._commands[name] = jnp.array(cmd)
                 self._time_since_resample[name][env_ids] = 0.0
 
     def step(self, dt: float) -> None:
         """Update time counters and resample if interval exceeded."""
-        num_envs = self._env.num_envs
         for name, cmd_cfg in self._cfg.items():
             if isinstance(cmd_cfg, UniformVelocityCommandCfg):
                 self._time_since_resample[name] += dt
-                resample_ids = np.where(
-                    self._time_since_resample[name] >= cmd_cfg.resampling_time
-                )[0].tolist()
+                resample_ids = np.where(self._time_since_resample[name] >= cmd_cfg.resampling_time)[
+                    0
+                ].tolist()
                 if resample_ids:
                     self.resample(resample_ids)
 

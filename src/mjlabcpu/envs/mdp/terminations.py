@@ -78,7 +78,7 @@ def object_out_of_bounds(
 ) -> jnp.ndarray:
     """True if object root XY distance from origin exceeds max_xy_dist. Shape: (num_envs,) bool."""
     pos_xy = state.xpos[:, entity_cfg.root_body_id, :2]
-    return jnp.sqrt(jnp.sum(pos_xy ** 2, axis=-1)) > max_xy_dist
+    return jnp.sqrt(jnp.sum(pos_xy**2, axis=-1)) > max_xy_dist
 
 
 def cartpole_fallen(

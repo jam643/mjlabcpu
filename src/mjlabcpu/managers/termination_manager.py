@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import jax
 import jax.numpy as jnp
@@ -35,7 +36,7 @@ class TerminationManager(ManagerBase):
     def __init__(
         self,
         cfg: dict[str, TerminationTermCfg],
-        env: "ManagerBasedRlEnv",
+        env: ManagerBasedRlEnv,
     ) -> None:
         super().__init__(env)
         self._cfg = cfg
@@ -70,7 +71,7 @@ class TerminationManager(ManagerBase):
             truncated = jnp.zeros(num_envs, dtype=jnp.bool_)
             terms_out = {}
 
-            for fn, is_to, n in zip(fns, timeouts, _names):
+            for fn, is_to, n in zip(fns, timeouts, _names, strict=True):
                 v = fn(state)  # (num_envs,) bool
                 terms_out[n] = v
                 done = done | v
@@ -81,9 +82,7 @@ class TerminationManager(ManagerBase):
 
         self._jit_compute = jax.jit(_compute)
 
-    def compute(
-        self, state: SimState
-    ) -> tuple[jnp.ndarray, jnp.ndarray, dict[str, jnp.ndarray]]:
+    def compute(self, state: SimState) -> tuple[jnp.ndarray, jnp.ndarray, dict[str, jnp.ndarray]]:
         """Compute termination signals.
 
         Returns:

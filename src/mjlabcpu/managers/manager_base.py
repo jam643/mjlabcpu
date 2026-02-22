@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from mjlabcpu.envs.manager_based_rl_env import ManagerBasedRlEnv
@@ -26,11 +27,11 @@ class ManagerBase:
     the scene, sim, and other managers through the env.
     """
 
-    def __init__(self, env: "ManagerBasedRlEnv") -> None:
+    def __init__(self, env: ManagerBasedRlEnv) -> None:
         self._env = env
 
     @property
-    def env(self) -> "ManagerBasedRlEnv":
+    def env(self) -> ManagerBasedRlEnv:
         return self._env
 
     def reset(self, env_ids: list[int] | None = None) -> None:  # noqa: B027

@@ -32,7 +32,7 @@ class ActionTerm(ABC):
     ``self._processed_actions`` and writes to the simulation.
     """
 
-    def __init__(self, cfg: ActionTermCfg, env: "ManagerBasedRlEnv") -> None:
+    def __init__(self, cfg: ActionTermCfg, env: ManagerBasedRlEnv) -> None:
         self.cfg = cfg
         self._env = env
         self._processed_actions: jnp.ndarray | None = None
@@ -89,7 +89,7 @@ class ActionManager(ManagerBase):
     def __init__(
         self,
         cfg: dict[str, ActionTermCfg],
-        env: "ManagerBasedRlEnv",
+        env: ManagerBasedRlEnv,
     ) -> None:
         super().__init__(env)
         self._cfg = cfg
@@ -109,9 +109,7 @@ class ActionManager(ManagerBase):
         """Gymnasium Box action space."""
         import gymnasium as gym
 
-        return gym.spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.action_dim,), dtype=np.float32
-        )
+        return gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self.action_dim,), dtype=np.float32)
 
     def process_actions(self, actions: jnp.ndarray) -> None:
         """Split flat action vector and dispatch to each term."""

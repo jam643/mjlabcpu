@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import jax
 import jax.numpy as jnp
@@ -47,7 +48,7 @@ class ObservationManager(ManagerBase):
     def __init__(
         self,
         cfg: dict[str, ObservationGroupCfg],
-        env: "ManagerBasedRlEnv",
+        env: ManagerBasedRlEnv,
     ) -> None:
         super().__init__(env)
         self._cfg = cfg
@@ -81,7 +82,7 @@ class ObservationManager(ManagerBase):
                 term_names.append(term_name)
 
             # Store raw (non-JIT) term functions for monitoring
-            self._raw_term_fns[group_name] = list(zip(term_names, term_fns))
+            self._raw_term_fns[group_name] = list(zip(term_names, term_fns, strict=True))
 
             # Capture term_fns in closure for JIT
             _fns = term_fns

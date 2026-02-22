@@ -84,8 +84,7 @@ class Simulation:
         """
         model = self.model
         futures = {
-            self._executor.submit(mujoco.mj_step, model, d): i
-            for i, d in enumerate(self.data)
+            self._executor.submit(mujoco.mj_step, model, d): i for i, d in enumerate(self.data)
         }
         # Wait for all to finish and propagate exceptions
         for future in as_completed(futures):
@@ -95,8 +94,7 @@ class Simulation:
         """Run mj_forward (kinematics + sensors, no dynamics) on all envs in parallel."""
         model = self.model
         futures = {
-            self._executor.submit(mujoco.mj_forward, model, d): i
-            for i, d in enumerate(self.data)
+            self._executor.submit(mujoco.mj_forward, model, d): i for i, d in enumerate(self.data)
         }
         for future in as_completed(futures):
             future.result()

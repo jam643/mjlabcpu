@@ -5,15 +5,14 @@ from __future__ import annotations
 import os
 
 import numpy as np
-import pytest
 
 from mjlabcpu.entity import EntityCfg
+from mjlabcpu.envs.manager_based_rl_env import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
+from mjlabcpu.envs.mdp import events as event_mdp
 from mjlabcpu.envs.mdp import observations as obs_mdp
 from mjlabcpu.envs.mdp import rewards as rew_mdp
 from mjlabcpu.envs.mdp import terminations as term_mdp
-from mjlabcpu.envs.mdp import events as event_mdp
 from mjlabcpu.envs.mdp.actions import JointPositionAction
-from mjlabcpu.envs.manager_based_rl_env import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
 from mjlabcpu.managers import (
     ActionTermCfg,
     EventTermCfg,
@@ -150,5 +149,7 @@ class TestManagerBasedRlEnv:
         for _ in range(20):
             obs, _, _, _, _ = env.step(actions)
         # Env 0 and env 1 should have different cart positions
-        assert not np.allclose(obs[0], obs[1], atol=1e-4), "Envs should diverge with different actions"
+        assert not np.allclose(obs[0], obs[1], atol=1e-4), (
+            "Envs should diverge with different actions"
+        )
         env.close()

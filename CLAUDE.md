@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Workflow
+
+- Git commit after large changes or new features.
+- Use ruff for formatting and linting (`ruff format` + `ruff check`).
+
 ## Commands
 
 ```bash

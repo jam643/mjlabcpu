@@ -7,14 +7,14 @@ Run download first:
 
 from __future__ import annotations
 
-import os
 import pathlib
 
 import numpy as np
 import pytest
 
-PANDA_XML = pathlib.Path(__file__).parent.parent / "examples" / "assets" / "panda_push" / "panda_nohand.xml"
-PUCK_XML = pathlib.Path(__file__).parent.parent / "examples" / "assets" / "panda_push" / "puck.xml"
+_ASSET_DIR = pathlib.Path(__file__).parent.parent / "examples" / "assets" / "panda_push"
+PANDA_XML = _ASSET_DIR / "panda_nohand.xml"
+PUCK_XML = _ASSET_DIR / "puck.xml"
 
 pytestmark = pytest.mark.skipif(
     not PANDA_XML.exists(),
@@ -23,7 +23,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def _make_env(num_envs: int = 2):
-    """Import and build the panda push env inside the function to avoid import errors when skipped."""
+    """Build the panda push env inside the function to avoid import errors when skipped."""
     from mjlabcpu.entity import EntityCfg
     from mjlabcpu.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
     from mjlabcpu.envs.mdp import events as event_mdp

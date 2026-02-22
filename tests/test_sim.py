@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import mujoco
-import numpy as np
-import pytest
-
-from mjlabcpu.sim.sim import Simulation, SimulationCfg
-from mjlabcpu.sim.sim_state import SimState, extract_state
 import jax.numpy as jnp
+import numpy as np
+
+from mjlabcpu.sim.sim import Simulation
+from mjlabcpu.sim.sim_state import extract_state
 
 
 class TestSimulation:

@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 
 import numpy as np
-import pytest
 
 ASSET_PATH = os.path.join(os.path.dirname(__file__), "..", "examples", "assets", "cartpole.xml")
 
@@ -247,7 +246,7 @@ def test_ppo_save_load(tmp_path):
 
         leaves1 = jax.tree_util.tree_leaves(trainer._state.params)
         leaves2 = jax.tree_util.tree_leaves(trainer2._state.params)
-        for l1, l2 in zip(leaves1, leaves2):
+        for l1, l2 in zip(leaves1, leaves2, strict=True):
             assert np.allclose(np.array(l1), np.array(l2))
     finally:
         env.close()

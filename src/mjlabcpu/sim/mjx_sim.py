@@ -21,9 +21,7 @@ class MjxSimulation:
     objects — all state lives in JAX arrays on the accelerator.
     """
 
-    def __init__(
-        self, model: mujoco.MjModel, num_envs: int, cfg: SimulationCfg
-    ) -> None:
+    def __init__(self, model: mujoco.MjModel, num_envs: int, cfg: SimulationCfg) -> None:
         # Apply config overrides to the model (same as CPU Simulation)
         model.opt.timestep = cfg.dt
         model.opt.gravity[:] = cfg.gravity
@@ -98,9 +96,7 @@ class MjxSimulation:
 
     def _batch(self, single_data) -> object:
         """Stack a single-env ``mjx.Data`` into a ``(num_envs, ...)`` batch."""
-        return jax.tree_util.tree_map(
-            lambda x: jnp.stack([x] * self._num_envs), single_data
-        )
+        return jax.tree_util.tree_map(lambda x: jnp.stack([x] * self._num_envs), single_data)
 
     def close(self) -> None:
         pass

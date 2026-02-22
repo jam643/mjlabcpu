@@ -34,7 +34,7 @@ class EnvMonitor:
         app_id:  rerun application ID (appears in the viewer title bar).
     """
 
-    def __init__(self, env: "ManagerBasedRlEnv", env_idx: int = 0, app_id: str = "mjlabcpu") -> None:
+    def __init__(self, env: ManagerBasedRlEnv, env_idx: int = 0, app_id: str = "mjlabcpu") -> None:
         try:
             import rerun as rr
         except ImportError as e:
@@ -112,8 +112,7 @@ class EnvMonitor:
             rr.log(
                 "episode/reset",
                 rr.TextLog(
-                    f"Episode {self._episode} ended ({reason}) "
-                    f"after {self._step_in_ep} steps"
+                    f"Episode {self._episode} ended ({reason}) after {self._step_in_ep} steps"
                 ),
             )
             self._step_in_ep = 0

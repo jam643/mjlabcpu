@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import jax
 import jax.numpy as jnp
@@ -35,7 +36,7 @@ class RewardManager(ManagerBase):
     def __init__(
         self,
         cfg: dict[str, RewardTermCfg],
-        env: "ManagerBasedRlEnv",
+        env: ManagerBasedRlEnv,
     ) -> None:
         super().__init__(env)
         self._cfg = cfg
@@ -66,7 +67,7 @@ class RewardManager(ManagerBase):
         ) -> tuple[jnp.ndarray, dict]:
             terms_out = {}
             total = None
-            for fn, w, n in zip(fns, ws, _names):
+            for fn, w, n in zip(fns, ws, _names, strict=True):
                 v = fn(state)  # (num_envs,)
                 terms_out[n] = v
                 weighted = v * w
