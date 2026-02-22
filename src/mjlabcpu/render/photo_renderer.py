@@ -1,14 +1,10 @@
-"""Photorealistic renderer using Blender Cycles via a persistent subprocess.
+"""Photorealistic renderer using Blender Cycles via the ``bpy`` PyPI package.
 
-No ``bpy`` pip package required — uses system Blender (which bundles its own
-Python + bpy internally), so it works with any host Python version.
+**Prerequisites**::
 
-**Prerequisites**: install Blender ≥ 4.2 from https://www.blender.org/download/
-(macOS: drag to /Applications; the renderer auto-detects it).
+    uv pip install -e ".[photo]"   # installs bpy>=4.2.0 (requires Python 3.11)
 
 Usage::
-
-    uv pip install -e ".[photo]"   # no-op; installs nothing — Blender is system-level
 
     uv run python scripts/view.py cartpole --rgb --photo --steps 500
 
@@ -20,244 +16,63 @@ Performance expectations (Apple Silicon, 64 samples):
 from __future__ import annotations
 
 import os
-import subprocess
+import platform
+import shutil
 import tempfile
-import textwrap
 
+import bpy
 import mujoco
 import numpy as np
 
-# ---------------------------------------------------------------------------
-# Blender render-server script (runs inside Blender's bundled Python)
-# ---------------------------------------------------------------------------
 
-_BLENDER_SCRIPT = textwrap.dedent("""\
-    \"\"\"Blender background render server.  Driven by single-line stdin commands.\"\"\"
-    import sys, os, platform
-    import numpy as np
-    import bpy
-
-    # ── parse CLI args ──────────────────────────────────────────────────────
-    sep = sys.argv.index('--')
-    args = sys.argv[sep + 1:]
-    model_path, state_path, output_path = args[0], args[1], args[2]
-    width, height, samples = int(args[3]), int(args[4]), int(args[5])
-    device   = args[6]
-    cam_pos  = (float(args[7]),  float(args[8]),  float(args[9]))
-    cam_look = (float(args[10]), float(args[11]), float(args[12]))
-
-    # ── math helpers ────────────────────────────────────────────────────────
-    def _quat_wxyz_to_mat(q):
-        w,x,y,z = float(q[0]),float(q[1]),float(q[2]),float(q[3])
-        return np.array([
-            [1-2*(y*y+z*z),   2*(x*y-w*z),   2*(x*z+w*y)],
-            [  2*(x*y+w*z), 1-2*(x*x+z*z),   2*(y*z-w*x)],
-            [  2*(x*z-w*y),   2*(y*z+w*x), 1-2*(x*x+y*y)],
-        ], dtype=np.float64)
-
-    def _mat_to_quat_wxyz(R):
-        t = R[0,0]+R[1,1]+R[2,2]
-        if t > 0:
-            s=0.5/np.sqrt(t+1); w=0.25/s
-            x=(R[2,1]-R[1,2])*s; y=(R[0,2]-R[2,0])*s; z=(R[1,0]-R[0,1])*s
-        elif R[0,0]>R[1,1] and R[0,0]>R[2,2]:
-            s=2*np.sqrt(1+R[0,0]-R[1,1]-R[2,2]); w=(R[2,1]-R[1,2])/s
-            x=0.25*s; y=(R[0,1]+R[1,0])/s; z=(R[0,2]+R[2,0])/s
-        elif R[1,1]>R[2,2]:
-            s=2*np.sqrt(1+R[1,1]-R[0,0]-R[2,2]); w=(R[0,2]-R[2,0])/s
-            x=(R[0,1]+R[1,0])/s; y=0.25*s; z=(R[1,2]+R[2,1])/s
-        else:
-            s=2*np.sqrt(1+R[2,2]-R[0,0]-R[1,1]); w=(R[1,0]-R[0,1])/s
-            x=(R[0,2]+R[2,0])/s; y=(R[1,2]+R[2,1])/s; z=0.25*s
-        return np.array([w,x,y,z], dtype=np.float64)
-
-    # ── scene setup ─────────────────────────────────────────────────────────
-    bpy.ops.wm.read_homefile(use_empty=True)
-    scene = bpy.context.scene
-    scene.render.engine = 'CYCLES'
-    scene.cycles.samples = samples
-    scene.render.resolution_x = width
-    scene.render.resolution_y = height
-    scene.render.resolution_percentage = 100
-
-    # Compute device
-    cycles_addon = bpy.context.preferences.addons.get('cycles')
-    if cycles_addon:
-        cp = cycles_addon.preferences
-        use_metal = (device == 'metal') or (
-            device == 'auto'
-            and platform.machine() == 'arm64'
-            and platform.system() == 'Darwin'
-        )
-        if use_metal:
-            try:
-                cp.compute_device_type = 'METAL'
-                cp.refresh_devices()
-                scene.cycles.device = 'GPU'
-            except Exception:
-                scene.cycles.device = 'CPU'
-        else:
-            scene.cycles.device = 'CPU'
-
-    # Camera
-    cd = bpy.data.cameras.new('Camera')
-    co = bpy.data.objects.new('Camera', cd)
-    scene.collection.objects.link(co); scene.camera = co
-    co.location = cam_pos
-    tg = bpy.data.objects.new('Target', None)
-    tg.location = cam_look
-    scene.collection.objects.link(tg)
-    con = co.constraints.new(type='TRACK_TO')
-    con.target = tg; con.track_axis = 'TRACK_NEGATIVE_Z'; con.up_axis = 'UP_Y'
-
-    # Sun light
-    sd = bpy.data.lights.new('Sun', type='SUN'); sd.energy = 3.0
-    so = bpy.data.objects.new('Sun', sd)
-    so.location = (5,-5,8); so.rotation_euler = (0.6,0,0.8)
-    scene.collection.objects.link(so)
-
-    # World background
-    w = bpy.data.worlds.new('World'); scene.world = w; w.use_nodes = True
-    bg = w.node_tree.nodes.get('Background')
-    if bg:
-        bg.inputs['Color'].default_value = (0.05,0.05,0.05,1)
-        bg.inputs['Strength'].default_value = 0.5
-
-    # ── load model geometry ──────────────────────────────────────────────────
-    md = np.load(model_path, allow_pickle=False)
-    geom_type    = md['geom_type']
-    geom_size    = md['geom_size']
-    geom_rgba    = md['geom_rgba']
-    geom_bodyid  = md['geom_bodyid']
-    geom_pos_arr = md['geom_pos']
-    geom_quat_arr= md['geom_quat']
-    geom_dataid  = md['geom_dataid']
-    has_mesh = bool(md['has_mesh'])
-    if has_mesh:
-        mesh_vert    = md['mesh_vert']
-        mesh_face    = md['mesh_face']
-        mesh_vertadr = md['mesh_vertadr']
-        mesh_vertnum = md['mesh_vertnum']
-        mesh_faceadr = md['mesh_faceadr']
-        mesh_facenum = md['mesh_facenum']
-
-    PLANE,SPHERE,CAPSULE,CYLINDER,BOX,MESH = 0,2,3,5,6,7
-
-    body_objs = {}   # body_id → [bpy_obj, ...]
-    body_gids = {}   # body_id → [geom_index, ...]
-
-    def _make_mat(rgba, idx):
-        mat = bpy.data.materials.new(f'mat{idx}')
-        mat.use_nodes = True
-        bsdf = mat.node_tree.nodes.get('Principled BSDF') or \\
-               mat.node_tree.nodes.new('ShaderNodeBsdfPrincipled')
-        bsdf.inputs['Base Color'].default_value = (
-            float(rgba[0]), float(rgba[1]), float(rgba[2]), 1.0)
-        bsdf.inputs['Roughness'].default_value = 0.4
-        bsdf.inputs['Metallic'].default_value  = 0.1
-        return mat
-
-    for gi in range(len(geom_type)):
-        rgba = geom_rgba[gi]
-        if float(rgba[3]) == 0.0:
-            continue
-        gtype = int(geom_type[gi])
-        sz    = geom_size[gi]
-        bid   = int(geom_bodyid[gi])
-        mat   = _make_mat(rgba, gi)
-        obj   = None
-
-        if gtype == PLANE:
-            s = float(sz[0]) if float(sz[0]) > 0 else 10.0
-            bpy.ops.mesh.primitive_plane_add(size=2.0)
-            obj = bpy.context.active_object; obj.scale = (s, s, 1.0)
-        elif gtype == SPHERE:
-            bpy.ops.mesh.primitive_uv_sphere_add(radius=float(sz[0]))
-            obj = bpy.context.active_object
-        elif gtype in (CAPSULE, CYLINDER):
-            bpy.ops.mesh.primitive_cylinder_add(
-                radius=float(sz[0]), depth=float(sz[1]) * 2.0)
-            obj = bpy.context.active_object
-        elif gtype == BOX:
-            bpy.ops.mesh.primitive_cube_add(size=2.0)
-            obj = bpy.context.active_object
-            obj.scale = (float(sz[0]), float(sz[1]), float(sz[2]))
-        elif gtype == MESH and has_mesh:
-            mid = int(geom_dataid[gi])
-            vs, vc = int(mesh_vertadr[mid]), int(mesh_vertnum[mid])
-            fs, fc = int(mesh_faceadr[mid]), int(mesh_facenum[mid])
-            if vc > 0 and fc > 0:
-                verts = [(float(v[0]),float(v[1]),float(v[2]))
-                         for v in mesh_vert[vs:vs+vc]]
-                faces = [(int(f[0]),int(f[1]),int(f[2]))
-                         for f in mesh_face[fs:fs+fc]]
-                mdata = bpy.data.meshes.new(f'mesh{mid}')
-                mdata.from_pydata(verts, [], faces); mdata.update()
-                obj = bpy.data.objects.new(f'mobj{mid}', mdata)
-                scene.collection.objects.link(obj)
-
-        if obj is None:
-            continue
-
-        if obj.data.materials:
-            obj.data.materials[0] = mat
-        else:
-            obj.data.materials.append(mat)
-        obj.rotation_mode = 'QUATERNION'
-
-        if bid not in body_objs:
-            body_objs[bid] = []; body_gids[bid] = []
-        body_objs[bid].append(obj); body_gids[bid].append(gi)
-
-    # Signal host that scene is ready
-    print('ready', flush=True)
-
-    # ── render loop ──────────────────────────────────────────────────────────
-    for line in sys.stdin:
-        cmd = line.strip()
-        if cmd == 'render':
-            state    = np.load(state_path, allow_pickle=False)
-            xpos_all = state['xpos']                      # (nbody, 3)
-            xmat_all = state['xmat'].reshape(-1, 3, 3)    # (nbody, 3, 3)
-
-            for bid, objs in body_objs.items():
-                xp = xpos_all[bid]; xm = xmat_all[bid]
-                for obj, gi in zip(objs, body_gids[bid]):
-                    gp = geom_pos_arr[gi]; gq = geom_quat_arr[gi]
-                    wp = xp + xm @ gp
-                    wm = xm @ _quat_wxyz_to_mat(gq)
-                    wq = _mat_to_quat_wxyz(wm)
-                    obj.location = (float(wp[0]),float(wp[1]),float(wp[2]))
-                    obj.rotation_quaternion = (
-                        float(wq[0]),float(wq[1]),float(wq[2]),float(wq[3]))
-
-            bpy.ops.render.render(write_still=False)
-            img = bpy.data.images.get('Render Result')
-            if img:
-                px = np.array(img.pixels, dtype=np.float32).reshape(height, width, 4)
-                rgb = np.clip(px[::-1, :, :3] * 255.0, 0, 255).astype(np.uint8)
-                np.save(output_path, rgb)
-                print('done', flush=True)
-            else:
-                print('error', flush=True)
-        elif cmd == 'quit':
-            break
-
-    sys.exit(0)
-""")
+def _quat_wxyz_to_mat(q: np.ndarray) -> np.ndarray:
+    """Convert a wxyz quaternion to a 3x3 rotation matrix."""
+    w, x, y, z = float(q[0]), float(q[1]), float(q[2]), float(q[3])
+    return np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+            [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+            [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
+        ],
+        dtype=np.float64,
+    )
 
 
-# ---------------------------------------------------------------------------
-# PhotoRenderer
-# ---------------------------------------------------------------------------
+def _mat_to_quat_wxyz(R: np.ndarray) -> np.ndarray:
+    """Convert a 3x3 rotation matrix to a wxyz quaternion."""
+    t = R[0, 0] + R[1, 1] + R[2, 2]
+    if t > 0:
+        s = 0.5 / np.sqrt(t + 1)
+        w = 0.25 / s
+        x = (R[2, 1] - R[1, 2]) * s
+        y = (R[0, 2] - R[2, 0]) * s
+        z = (R[1, 0] - R[0, 1]) * s
+    elif R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
+        s = 2 * np.sqrt(1 + R[0, 0] - R[1, 1] - R[2, 2])
+        w = (R[2, 1] - R[1, 2]) / s
+        x = 0.25 * s
+        y = (R[0, 1] + R[1, 0]) / s
+        z = (R[0, 2] + R[2, 0]) / s
+    elif R[1, 1] > R[2, 2]:
+        s = 2 * np.sqrt(1 + R[1, 1] - R[0, 0] - R[2, 2])
+        w = (R[0, 2] - R[2, 0]) / s
+        x = (R[0, 1] + R[1, 0]) / s
+        y = 0.25 * s
+        z = (R[1, 2] + R[2, 1]) / s
+    else:
+        s = 2 * np.sqrt(1 + R[2, 2] - R[0, 0] - R[1, 1])
+        w = (R[1, 0] - R[0, 1]) / s
+        x = (R[0, 2] + R[2, 0]) / s
+        y = (R[1, 2] + R[2, 1]) / s
+        z = 0.25 * s
+    return np.array([w, x, y, z], dtype=np.float64)
 
 
 class PhotoRenderer:
-    """Photorealistic offscreen renderer using a persistent Blender Cycles subprocess.
+    """Photorealistic offscreen renderer using Blender Cycles via ``bpy``.
 
-    Finds system Blender (``/Applications/Blender.app`` or PATH), launches it
-    once in background mode, and communicates via stdin/stdout + temp numpy
-    files.  Works with any host Python version — no ``bpy`` pip package needed.
+    Initializes a Blender scene from a MuJoCo model and renders it in-process
+    using Cycles.  No subprocess or system Blender installation required.
 
     Args:
         model: MuJoCo model (geometry, materials).
@@ -281,124 +96,179 @@ class PhotoRenderer:
     ) -> None:
         self._width = width
         self._height = height
-        self._blender_exe = self._find_blender()
+        self._model = model
+        self._last_xpos: np.ndarray | None = None
+        self._last_xmat: np.ndarray | None = None
 
-        # Temp directory for inter-process communication
+        # Temp directory for render output files.
+        # In headless bpy, write_still=True saves to filepath + ".png" (no frame suffix).
         self._tmpdir = tempfile.mkdtemp(prefix="mjlab_photo_")
-        model_path = os.path.join(self._tmpdir, "model.npz")
-        self._state_path = os.path.join(self._tmpdir, "state.npz")
-        self._output_path = os.path.join(self._tmpdir, "render.npy")
-        script_path = os.path.join(self._tmpdir, "render_scene.py")
+        self._render_path = os.path.join(self._tmpdir, "frame.png")
 
-        # Serialize model geometry once
-        self._save_model(model, model_path)
+        # Fresh Blender scene
+        bpy.ops.wm.read_homefile(use_empty=True)
+        scene = bpy.context.scene
+        scene.render.engine = "CYCLES"
+        scene.cycles.samples = samples
+        scene.render.resolution_x = width
+        scene.render.resolution_y = height
+        scene.render.resolution_percentage = 100
+        # Set filepath without extension — bpy appends ".png" in background mode.
+        scene.render.filepath = os.path.join(self._tmpdir, "frame")
+        scene.render.image_settings.file_format = "PNG"
+        scene.frame_current = 1
 
-        # Write embedded Blender script to disk
-        with open(script_path, "w") as f:
-            f.write(_BLENDER_SCRIPT)
-
-        # Launch persistent Blender background process
-        cmd = [
-            self._blender_exe,
-            "--background",
-            "--python",
-            script_path,
-            "--",
-            model_path,
-            self._state_path,
-            self._output_path,
-            str(width),
-            str(height),
-            str(samples),
-            device,
-            str(camera_pos[0]),
-            str(camera_pos[1]),
-            str(camera_pos[2]),
-            str(camera_look_at[0]),
-            str(camera_look_at[1]),
-            str(camera_look_at[2]),
-        ]
-        self._proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-
-        # Wait for Blender to finish building the scene
-        line = self._proc.stdout.readline().strip()
-        if line != "ready":
-            self._proc.kill()
-            raise RuntimeError(
-                f"Blender startup failed (got {line!r}). Re-run with stderr visible for details."
+        # GPU / Metal device
+        cycles_addon = bpy.context.preferences.addons.get("cycles")
+        if cycles_addon:
+            cp = cycles_addon.preferences
+            use_metal = (device == "metal") or (
+                device == "auto" and platform.machine() == "arm64" and platform.system() == "Darwin"
             )
+            if use_metal:
+                try:
+                    cp.compute_device_type = "METAL"
+                    cp.refresh_devices()
+                    scene.cycles.device = "GPU"
+                except Exception:
+                    scene.cycles.device = "CPU"
+            else:
+                scene.cycles.device = "CPU"
+
+        # Camera
+        cam_data = bpy.data.cameras.new("Camera")
+        cam_obj = bpy.data.objects.new("Camera", cam_data)
+        scene.collection.objects.link(cam_obj)
+        scene.camera = cam_obj
+        cam_obj.location = camera_pos
+
+        target = bpy.data.objects.new("Target", None)
+        target.location = camera_look_at
+        scene.collection.objects.link(target)
+        con = cam_obj.constraints.new(type="TRACK_TO")
+        con.target = target
+        con.track_axis = "TRACK_NEGATIVE_Z"
+        con.up_axis = "UP_Y"
+
+        # Sun light
+        sun_data = bpy.data.lights.new("Sun", type="SUN")
+        sun_data.energy = 3.0
+        sun_obj = bpy.data.objects.new("Sun", sun_data)
+        sun_obj.location = (5, -5, 8)
+        sun_obj.rotation_euler = (0.6, 0, 0.8)
+        scene.collection.objects.link(sun_obj)
+
+        # World background
+        world = bpy.data.worlds.new("World")
+        scene.world = world
+        world.use_nodes = True
+        bg = world.node_tree.nodes.get("Background")
+        if bg:
+            bg.inputs["Color"].default_value = (0.05, 0.05, 0.05, 1)
+            bg.inputs["Strength"].default_value = 0.5
+
+        # Geometry
+        self._body_objs: dict[int, list] = {}  # body_id → [bpy objects]
+        self._body_gids: dict[int, list] = {}  # body_id → [geom indices]
+        self._setup_geometry(model, scene)
 
     # ------------------------------------------------------------------
-    # Helpers
+    # Internal helpers
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _find_blender() -> str:
-        """Return path to Blender executable, or raise FileNotFoundError."""
-        import glob
-        import shutil
-
-        exe = shutil.which("blender")
-        if exe:
-            return exe
-
-        candidates = ["/Applications/Blender.app/Contents/MacOS/Blender"]
-        candidates += glob.glob("/Applications/Blender*.app/Contents/MacOS/Blender")
-        for path in candidates:
-            if os.path.isfile(path) and os.access(path, os.X_OK):
-                return path
-
-        raise FileNotFoundError(
-            "Blender not found on PATH or in /Applications. "
-            "Install from https://www.blender.org/download/ (≥ 4.2)."
+    def _make_material(rgba: np.ndarray, idx: int):
+        mat = bpy.data.materials.new(f"mat{idx}")
+        mat.use_nodes = True
+        bsdf = mat.node_tree.nodes.get("Principled BSDF") or mat.node_tree.nodes.new(
+            "ShaderNodeBsdfPrincipled"
         )
+        bsdf.inputs["Base Color"].default_value = (
+            float(rgba[0]),
+            float(rgba[1]),
+            float(rgba[2]),
+            1.0,
+        )
+        bsdf.inputs["Roughness"].default_value = 0.4
+        bsdf.inputs["Metallic"].default_value = 0.1
+        return mat
 
-    @staticmethod
-    def _save_model(model: mujoco.MjModel, path: str) -> None:
-        """Serialize model geometry to an .npz file for the Blender subprocess."""
+    def _setup_geometry(self, model: mujoco.MjModel, scene) -> None:
+        PLANE, SPHERE, CAPSULE, CYLINDER, BOX, MESH = 0, 2, 3, 5, 6, 7
         has_mesh = model.nmesh > 0
-        kwargs: dict = dict(
-            geom_type=model.geom_type,
-            geom_size=model.geom_size,
-            geom_rgba=model.geom_rgba,
-            geom_bodyid=model.geom_bodyid,
-            geom_pos=model.geom_pos,
-            geom_quat=model.geom_quat,
-            geom_dataid=model.geom_dataid,
-            has_mesh=np.array(has_mesh),
-        )
-        if has_mesh:
-            kwargs.update(
-                mesh_vert=model.mesh_vert,
-                mesh_face=model.mesh_face,
-                mesh_vertadr=model.mesh_vertadr,
-                mesh_vertnum=model.mesh_vertnum,
-                mesh_faceadr=model.mesh_faceadr,
-                mesh_facenum=model.mesh_facenum,
-            )
-        np.savez(path, **kwargs)
+
+        for gi in range(model.ngeom):
+            rgba = model.geom_rgba[gi]
+            if float(rgba[3]) == 0.0:
+                continue
+            gtype = int(model.geom_type[gi])
+            sz = model.geom_size[gi]
+            bid = int(model.geom_bodyid[gi])
+            mat = self._make_material(rgba, gi)
+            obj = None
+
+            if gtype == PLANE:
+                s = float(sz[0]) if float(sz[0]) > 0 else 10.0
+                bpy.ops.mesh.primitive_plane_add(size=2.0)
+                obj = bpy.context.active_object
+                obj.scale = (s, s, 1.0)
+            elif gtype == SPHERE:
+                bpy.ops.mesh.primitive_uv_sphere_add(radius=float(sz[0]))
+                obj = bpy.context.active_object
+            elif gtype in (CAPSULE, CYLINDER):
+                bpy.ops.mesh.primitive_cylinder_add(radius=float(sz[0]), depth=float(sz[1]) * 2.0)
+                obj = bpy.context.active_object
+            elif gtype == BOX:
+                bpy.ops.mesh.primitive_cube_add(size=2.0)
+                obj = bpy.context.active_object
+                obj.scale = (float(sz[0]), float(sz[1]), float(sz[2]))
+            elif gtype == MESH and has_mesh:
+                mid = int(model.geom_dataid[gi])
+                vs = int(model.mesh_vertadr[mid])
+                vc = int(model.mesh_vertnum[mid])
+                fs = int(model.mesh_faceadr[mid])
+                fc = int(model.mesh_facenum[mid])
+                if vc > 0 and fc > 0:
+                    verts = [
+                        (float(v[0]), float(v[1]), float(v[2]))
+                        for v in model.mesh_vert[vs : vs + vc]
+                    ]
+                    faces = [
+                        (int(f[0]), int(f[1]), int(f[2])) for f in model.mesh_face[fs : fs + fc]
+                    ]
+                    mdata = bpy.data.meshes.new(f"mesh{mid}")
+                    mdata.from_pydata(verts, [], faces)
+                    mdata.update()
+                    obj = bpy.data.objects.new(f"mobj{mid}", mdata)
+                    scene.collection.objects.link(obj)
+
+            if obj is None:
+                continue
+
+            if obj.data.materials:
+                obj.data.materials[0] = mat
+            else:
+                obj.data.materials.append(mat)
+            obj.rotation_mode = "QUATERNION"
+
+            if bid not in self._body_objs:
+                self._body_objs[bid] = []
+                self._body_gids[bid] = []
+            self._body_objs[bid].append(obj)
+            self._body_gids[bid].append(gi)
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def update(self, data: mujoco.MjData) -> None:
-        """Write body transforms so the next ``render()`` picks them up.
+        """Store body transforms so the next ``render()`` picks them up.
 
         Args:
             data: MuJoCo data object (env 0) after ``mj_step`` / ``mj_forward``.
         """
-        np.savez(
-            self._state_path,
-            xpos=data.xpos,  # (nbody, 3)
-            xmat=data.xmat,  # (nbody, 9) — reshaped to (nbody,3,3) in script
-        )
+        self._last_xpos = data.xpos.copy()  # (nbody, 3)
+        self._last_xmat = data.xmat.reshape(-1, 3, 3).copy()  # (nbody, 3, 3)
 
     def render(self) -> np.ndarray:
         """Render the current scene.
@@ -406,30 +276,50 @@ class PhotoRenderer:
         Returns:
             RGB image as ``(height, width, 3)`` uint8 numpy array.
         """
-        if self._proc.poll() is not None:
-            raise RuntimeError("Blender subprocess exited unexpectedly.")
+        if self._last_xpos is None or self._last_xmat is None:
+            raise RuntimeError("Call update() before render().")
 
-        self._proc.stdin.write("render\n")
-        self._proc.stdin.flush()
+        xpos_all = self._last_xpos
+        xmat_all = self._last_xmat
+        model = self._model
 
-        response = self._proc.stdout.readline().strip()
-        if response == "error":
-            raise RuntimeError("Blender render failed — Render Result image not found.")
-        if response != "done":
-            raise RuntimeError(f"Unexpected response from Blender: {response!r}")
+        for bid, objs in self._body_objs.items():
+            xp = xpos_all[bid]
+            xm = xmat_all[bid]
+            for obj, gi in zip(objs, self._body_gids[bid], strict=True):
+                gp = model.geom_pos[gi]
+                gq = model.geom_quat[gi]
+                wp = xp + xm @ gp
+                wm = xm @ _quat_wxyz_to_mat(gq)
+                wq = _mat_to_quat_wxyz(wm)
+                obj.location = (float(wp[0]), float(wp[1]), float(wp[2]))
+                obj.rotation_quaternion = (
+                    float(wq[0]),
+                    float(wq[1]),
+                    float(wq[2]),
+                    float(wq[3]),
+                )
 
-        return np.load(self._output_path)
+        # write_still=True saves to scene.render.filepath + frame number + extension.
+        # In headless bpy the in-memory 'Render Result' pixels buffer is empty;
+        # writing to disk and reloading is the reliable approach.
+        bpy.ops.render.render(write_still=True)
+        if not os.path.exists(self._render_path):
+            raise RuntimeError(
+                f"Blender render failed — output file not found: {self._render_path}"
+            )
+
+        img = bpy.data.images.load(self._render_path)
+        try:
+            px = np.empty(self._height * self._width * 4, dtype=np.float32)
+            img.pixels.foreach_get(px)
+            px = px.reshape(self._height, self._width, 4)
+        finally:
+            bpy.data.images.remove(img)
+            os.unlink(self._render_path)
+
+        return np.clip(px[::-1, :, :3] * 255.0, 0, 255).astype(np.uint8)
 
     def close(self) -> None:
-        """Shut down the Blender subprocess and remove temp files."""
-        import shutil
-
-        try:
-            if self._proc.poll() is None:
-                self._proc.stdin.write("quit\n")
-                self._proc.stdin.flush()
-                self._proc.wait(timeout=10)
-        except Exception:
-            self._proc.kill()
-        finally:
-            shutil.rmtree(self._tmpdir, ignore_errors=True)
+        """Remove temporary render directory."""
+        shutil.rmtree(self._tmpdir, ignore_errors=True)

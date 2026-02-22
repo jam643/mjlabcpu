@@ -21,7 +21,7 @@ dependencies = [
 mjx = ["mujoco-mjx>=3.2.0"]
 train = ["wandb>=0.17.0"]
 viz = ["rerun-sdk>=0.20"]
-photo = []  # requires system Blender: https://www.blender.org/download/
+photo = ["bpy>=4.2.0; python_version == '3.11'"]  # bpy requires Python 3.11 exactly; install: pip install "mjlabcpu[photo]"
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.0.0",
