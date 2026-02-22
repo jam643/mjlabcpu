@@ -2,10 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project Purpose
+
+This repo provides an **Isaac Lab manager-based RL API** with a MuJoCo CPU/MJX backend. It is analogous to [MjLab](https://github.com/mujocolab/mjlab), but that project only supports the MuJoCo Warp backend — this one targets CPU MuJoCo and MJX (JAX-native, GPU-ready). Keep all design decisions consistent with this goal: declarative env config via dataclasses, Isaac Lab-style manager architecture, and pure-JAX JIT for observations/rewards/terminations.
+
 ## Workflow
 
 - Git commit after large changes or new features.
 - Use ruff for formatting and linting (`ruff format` + `ruff check`).
+- After large changes, update README.md to reflect the latest state — but first summarize the planned changes to the user and wait for approval before editing.
 
 ## Commands
 
@@ -105,7 +110,7 @@ Then pass the env name to `scripts/view.py` or `scripts/train.py`.
 
 - **Package install:** `uv sync --extra dev` does NOT install the package for test imports. Always run `uv pip install -e .` after `uv sync`.
 - **MjSpec.attach:** Must pass a frame: `frame = spec.worldbody.add_frame(); spec.attach(child, prefix="name/", frame=frame)`.
-- **macOS interactive viewer:** Requires `mjpython`. Offscreen `rgb_array` works with regular `python`.
+- **macOS interactive viewer:** `launch_passive` requires `mjpython` — cannot run via VS Code debugpy or regular `python`. Must be launched from the terminal: `mjpython scripts/view.py <env>`. Offscreen `rgb_array` works with regular `python`.
 - **JAX indexing:** `.at[env_ids].set(...)` requires `jnp.array(env_ids)` when `env_ids` is a plain Python list.
 - **`render()` import:** Use `from mujoco import viewer as _mjviewer` inside functions to avoid shadowing the top-level `mujoco` import.
 - **PPO update step:** Use plain `@jax.jit` — do NOT mark array args as `static_argnums`.

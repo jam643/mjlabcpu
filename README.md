@@ -399,3 +399,12 @@ uv run pytest
 # Skip MJX-specific tests if mujoco-mjx is not installed
 uv run pytest --ignore=tests/test_mjx.py
 ```
+
+## Related Projects
+
+- **[MjLab](https://github.com/mujocolab/mjlab)** — the closest sibling project: same Isaac Lab manager-based API concept, but targets the MuJoCo Warp backend (GPU via CUDA). `mjlabcpu` targets CPU MuJoCo and MJX (JAX-native, GPU-ready via XLA) instead. The two projects were developed independently.
+- **[Isaac Lab](https://isaac-sim.github.io/IsaacLab/)** — the original manager-based RL framework this API is modelled after, built on NVIDIA Omniverse/Isaac Sim.
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE) for the full text.
