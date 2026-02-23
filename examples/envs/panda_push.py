@@ -20,6 +20,12 @@ if not PANDA_XML.exists():
     )
     sys.exit(1)
 
+# --- Debug: fixed puck start and goal (remove randomisation to simplify training) ---
+# Set both to the same value (min==max) to disable randomisation.
+# The goal_marker.xml is generated from these constants so it always matches.
+PUCK_X, PUCK_Y = 0.6, 0.0
+GOAL_X, GOAL_Y = 0.55, 0.2
+
 from mjlabcpu.entity import EntityCfg  # noqa: E402
 from mjlabcpu.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg  # noqa: E402
 from mjlabcpu.envs.mdp import events as event_mdp  # noqa: E402
@@ -52,6 +58,20 @@ PUCK_CFG = SceneEntityCfg(name="puck")
 
 
 def make_env(num_envs: int = 1, render_mode: str | None = None) -> ManagerBasedRlEnv:
+    # Generate goal marker XML from constants so its position always matches GOAL_X/GOAL_Y.
+    goal_marker_xml = ASSET_DIR / "goal_marker.xml"
+    goal_marker_xml.write_text(
+        f"""<mujoco model="goal_marker">
+  <worldbody>
+    <body name="goal_marker" pos="{GOAL_X} {GOAL_Y} 0.001">
+      <geom type="cylinder" size="0.08 0.001" rgba="0.1 0.9 0.1 0.5"
+            contype="0" conaffinity="0"/>
+    </body>
+  </worldbody>
+</mujoco>
+"""
+    )
+
     cfg = ManagerBasedRlEnvCfg(
         scene=SceneCfg(
             num_envs=num_envs,
@@ -59,6 +79,7 @@ def make_env(num_envs: int = 1, render_mode: str | None = None) -> ManagerBasedR
             entities={
                 "panda": EntityCfg(prim_path="panda", spawn=str(PANDA_XML)),
                 "puck": EntityCfg(prim_path="puck", spawn=str(PUCK_XML)),
+                "goal_marker": EntityCfg(prim_path="goal_marker", spawn=str(goal_marker_xml)),
             },
         ),
         sim=SimulationCfg(dt=DT),
@@ -141,15 +162,19 @@ def make_env(num_envs: int = 1, render_mode: str | None = None) -> ManagerBasedR
                 mode="reset",
                 params={
                     "entity_name": "puck",
-                    "pose_range": {"x": (-0.4, 0.4), "y": (-0.4, 0.4), "z": (0.02, 0.02)},
+                    "pose_range": {
+                        "x": (PUCK_X, PUCK_X),
+                        "y": (PUCK_Y, PUCK_Y),
+                        "z": (0.02, 0.02),
+                    },
                     "velocity_range": {},
                 },
             ),
         },
         commands={
             "goal_pos": GoalPositionCommandCfg(
-                x_range=(-0.4, 0.4),
-                y_range=(-0.4, 0.4),
+                x_range=(GOAL_X, GOAL_X),
+                y_range=(GOAL_Y, GOAL_Y),
                 z=0.02,
             ),
         },

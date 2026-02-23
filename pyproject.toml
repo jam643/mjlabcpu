@@ -9,19 +9,19 @@ description = "Isaac Lab manager-based API with standard CPU MuJoCo and JAX JIT"
 requires-python = ">=3.10"
 dependencies = [
     "mujoco>=3.2.0",
+    "mujoco-mjx>=3.2.0",
     "jax[cpu]>=0.4.20",
     "numpy>=1.26.0",
     "gymnasium>=0.29.0",
     "prettytable>=3.9.0",
     "flax>=0.8.0",
     "optax>=0.2.0",
+    "wandb>=0.17.0",
+    "rerun-sdk>=0.20",
 ]
 
 [project.optional-dependencies]
-mjx = ["mujoco-mjx>=3.2.0"]
-train = ["wandb>=0.17.0"]
-viz = ["rerun-sdk>=0.20"]
-photo = ["bpy>=4.2.0; python_version == '3.11'"]  # bpy requires Python 3.11 exactly; install: pip install "mjlabcpu[photo]"
+photo = ["bpy>=4.2.0; python_version == '3.11'"]  # bpy ~400MB; install: pip install "mjlabcpu[photo]"
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.0.0",

@@ -29,14 +29,12 @@ uv sync
 uv pip install -e .
 ```
 
-Requires Python ≥ 3.10. Core dependencies: `mujoco>=3.2.0`, `jax[cpu]>=0.4.20`, `flax>=0.8.0`, `optax>=0.2.0`, `gymnasium>=0.29.0`.
+Requires Python ≥ 3.10. Core dependencies: `mujoco`, `mujoco-mjx`, `jax[cpu]`, `flax`, `optax`, `gymnasium`, `wandb`, `rerun-sdk`.
 
 Optional extras:
 
 ```bash
-uv pip install mjlabcpu[mjx]    # MuJoCo MJX backend (GPU-ready)
-uv pip install mjlabcpu[train]  # Weights & Biases logging
-uv pip install mjlabcpu[viz]    # rerun live monitoring dashboard
+uv pip install "mjlabcpu[photo]"  # Blender photo-realistic renderer (~400 MB, Python 3.11 only)
 uv pip install "imageio[ffmpeg]"  # save RGB videos from --rgb mode
 ```
 
@@ -263,7 +261,6 @@ The entire env step — physics (×decimation via `lax.scan`), observations, rew
 **Limitations vs CPU backend:**
 - Only `reset_joints_uniform` events are supported inside the fused kernel (other event functions are skipped)
 - Only `"rgb_array"` render mode is available (no passive viewer for MJX)
-- Requires `mujoco-mjx` to be installed (`pip install mujoco-mjx`)
 
 ## Rendering
 
@@ -396,8 +393,6 @@ tests/                   # pytest suite (49 tests)
 
 ```bash
 uv run pytest
-# Skip MJX-specific tests if mujoco-mjx is not installed
-uv run pytest --ignore=tests/test_mjx.py
 ```
 
 ## Related Projects
