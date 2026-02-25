@@ -77,6 +77,72 @@ class JointPositionAction(ActionTerm):
         return ctrl.at[:, self._resolved.actuator_ids].set(processed)
 
 
+class JointPosDeltaAction(ActionTerm):
+    """Accumulates joint position deltas to form an absolute target written to ``mjData.ctrl``.
+
+    Each step: ``target += scale * action``.  The target persists across
+    steps within an episode and is reset to the model's default qpos on
+    episode reset.
+
+    The value stored in ``SimState.action`` (and returned by the
+    ``last_action`` observation) is the **absolute target after
+    accumulation**, not the raw delta.  This gives the policy a stable
+    positional reference without needing to integrate deltas itself.
+
+    Expected ``cfg.params`` keys:
+        - ``entity_cfg`` (:class:`SceneEntityCfg`): entity to actuate.
+        - ``scale`` (float, default 0.05): multiplier on each delta step.
+        - ``clip_range`` (tuple[float, float] | None, default None):
+          if given, clamps the accumulated target to ``[low, high]``.
+
+    NOT JIT-compiled — writes to ``mjData.ctrl`` (C arrays).
+    MJX backend (``compute_ctrl_jax``) is not supported for this term.
+    """
+
+    def __init__(self, cfg: ActionTermCfg, env: ManagerBasedRlEnv) -> None:
+        super().__init__(cfg, env)
+        params = cfg.params
+        entity_cfg: SceneEntityCfg = params.get("entity_cfg", SceneEntityCfg(name="robot"))
+        self._resolved = entity_cfg.resolve(env.scene)
+        self._scale: float = params.get("scale", 0.05)
+        self._clip_range: tuple[float, float] | None = params.get("clip_range", None)
+
+        n_act = int(self._resolved.actuator_ids.shape[0])
+        default = np.array(self._resolved.default_qpos[:n_act])
+        # (num_envs, n_act) — persists across steps, reset per episode
+        self._current_target = np.tile(default, (env.num_envs, 1))
+
+    @property
+    def action_dim(self) -> int:
+        return int(self._resolved.actuator_ids.shape[0])
+
+    @property
+    def observed_actions(self) -> jnp.ndarray:
+        """Return the absolute position target, not the raw delta."""
+        return jnp.array(self._current_target)
+
+    def process_actions(self, actions: jnp.ndarray) -> None:
+        """Accumulate scaled delta onto the running target."""
+        self._raw_actions = actions
+        self._current_target = self._current_target + self._scale * np.array(actions)
+        if self._clip_range is not None:
+            lo, hi = self._clip_range
+            self._current_target = np.clip(self._current_target, lo, hi)
+        self._processed_actions = jnp.array(self._current_target)
+
+    def apply_actions(self) -> None:
+        """Write the accumulated target to ``mjData.ctrl`` for each environment."""
+        act_ids = np.array(self._resolved.actuator_ids)
+        for i, data in enumerate(self._env.sim.data):
+            data.ctrl[act_ids] = self._current_target[i]
+
+    def reset(self, env_ids: list[int]) -> None:
+        """Reset the accumulated target to default qpos for the given environments."""
+        n_act = self.action_dim
+        default = np.array(self._resolved.default_qpos[:n_act])
+        self._current_target[env_ids] = default
+
+
 class JointVelocityAction(ActionTerm):
     """Writes joint velocity targets to ``mjData.ctrl``.
 

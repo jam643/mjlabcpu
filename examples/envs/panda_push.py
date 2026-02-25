@@ -23,8 +23,8 @@ if not PANDA_XML.exists():
 # --- Debug: fixed puck start and goal (remove randomisation to simplify training) ---
 # Set both to the same value (min==max) to disable randomisation.
 # The goal_marker.xml is generated from these constants so it always matches.
-PUCK_X, PUCK_Y = 0.6, 0.0
-GOAL_X, GOAL_Y = 0.55, 0.2
+PUCK_X, PUCK_Y = 0.5, 0.0
+GOAL_X, GOAL_Y = 0.45, 0.2
 
 from mjlabcpu.entity import EntityCfg  # noqa: E402
 from mjlabcpu.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg  # noqa: E402
@@ -32,7 +32,7 @@ from mjlabcpu.envs.mdp import events as event_mdp  # noqa: E402
 from mjlabcpu.envs.mdp import observations as obs_mdp  # noqa: E402
 from mjlabcpu.envs.mdp import rewards as rew_mdp  # noqa: E402
 from mjlabcpu.envs.mdp import terminations as term_mdp  # noqa: E402
-from mjlabcpu.envs.mdp.actions import JointPositionAction  # noqa: E402
+from mjlabcpu.envs.mdp.actions import JointPosDeltaAction  # noqa: E402
 from mjlabcpu.managers import (  # noqa: E402
     ActionTermCfg,
     EventTermCfg,
@@ -140,8 +140,8 @@ def make_env(num_envs: int = 1, render_mode: str | None = None) -> ManagerBasedR
         },
         actions={
             "arm": ActionTermCfg(
-                cls=JointPositionAction,
-                params={"entity_cfg": PANDA_CFG, "scale": 0.3, "use_default_offset": True},
+                cls=JointPosDeltaAction,
+                params={"entity_cfg": PANDA_CFG, "scale": 0.05},
             ),
         },
         events={
@@ -150,6 +150,7 @@ def make_env(num_envs: int = 1, render_mode: str | None = None) -> ManagerBasedR
                 mode="reset",
                 params={
                     "entity_name": "panda",
+                    "nominal_joint_pos": [0.0, 0.4, 0.0, -1.8, 0.0, 2.2, 0.0],
                     "position_range": (-0.1, 0.1),
                     "velocity_range": (-0.05, 0.05),
                 },

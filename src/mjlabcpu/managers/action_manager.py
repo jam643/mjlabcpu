@@ -55,10 +55,29 @@ class ActionTerm(ABC):
             raise RuntimeError("No action has been processed yet.")
         return self._raw_actions
 
+    @property
+    def observed_actions(self) -> jnp.ndarray:
+        """Action value stored in ``SimState.action`` and returned by the
+        ``last_action`` observation.
+
+        Defaults to raw actions.  Override in subclasses that maintain
+        internal state (e.g. :class:`JointPosDeltaAction`) to return the
+        absolute command instead of the raw network output.
+        """
+        return self.raw_actions
+
     def process_actions(self, actions: jnp.ndarray) -> None:
         """Pre-process raw actions (e.g., rescaling). Store in ``_processed_actions``."""
         self._raw_actions = actions
         self._processed_actions = actions
+
+    def reset(self, env_ids: list[int]) -> None:  # noqa: B027
+        """Reset any internal per-env state for the given environments.
+
+        Called by :class:`ManagerBasedRlEnv` after an episode ends.
+        The default implementation is a no-op; override in stateful terms
+        (e.g. :class:`JointPosDeltaAction`).
+        """
 
     @abstractmethod
     def apply_actions(self) -> None:
@@ -134,6 +153,16 @@ class ActionManager(ManagerBase):
         parts = [t.raw_actions for t in self._terms.values()]
         return jnp.concatenate(parts, axis=-1)
 
+    def get_observed_actions(self) -> jnp.ndarray:
+        """Concatenate ``observed_actions`` from all terms.
+
+        This is what gets stored in ``SimState.action`` and returned by the
+        ``last_action`` observation — each term controls whether it exposes
+        its raw delta or its accumulated absolute command.
+        """
+        parts = [t.observed_actions for t in self._terms.values()]
+        return jnp.concatenate(parts, axis=-1)
+
     def compute_ctrl_jax(self, actions: jnp.ndarray, nu: int) -> jnp.ndarray:
         """Compute the full ctrl array from a flat action vector. Pure JAX.
 
@@ -154,5 +183,7 @@ class ActionManager(ManagerBase):
             offset += dim
         return ctrl
 
-    def reset(self, env_ids: list[int] | None = None) -> None:
-        pass
+    def reset(self, env_ids: list[int]) -> None:
+        """Propagate reset to each term."""
+        for term in self._terms.values():
+            term.reset(env_ids)

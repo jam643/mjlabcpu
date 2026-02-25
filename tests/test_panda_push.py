@@ -30,7 +30,7 @@ def _make_env(num_envs: int = 2):
     from mjlabcpu.envs.mdp import observations as obs_mdp
     from mjlabcpu.envs.mdp import rewards as rew_mdp
     from mjlabcpu.envs.mdp import terminations as term_mdp
-    from mjlabcpu.envs.mdp.actions import JointPositionAction
+    from mjlabcpu.envs.mdp.actions import JointPosDeltaAction
     from mjlabcpu.managers import (
         ActionTermCfg,
         EventTermCfg,
@@ -110,8 +110,8 @@ def _make_env(num_envs: int = 2):
         },
         actions={
             "arm": ActionTermCfg(
-                cls=JointPositionAction,
-                params={"entity_cfg": panda_cfg, "scale": 0.3, "use_default_offset": True},
+                cls=JointPosDeltaAction,
+                params={"entity_cfg": panda_cfg, "scale": 0.05},
             ),
         },
         events={

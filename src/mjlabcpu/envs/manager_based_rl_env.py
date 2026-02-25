@@ -197,8 +197,10 @@ class ManagerBasedRlEnv(gym.Env):
         # 1. Process actions
         actions_jax = jnp.asarray(actions, dtype=jnp.float32)
         self._prev_action = self._action
-        self._action = actions_jax
         self._action_manager.process_actions(actions_jax)
+        # Use observed_actions so stateful terms (e.g. JointPosDeltaAction)
+        # expose their absolute target rather than the raw delta.
+        self._action = self._action_manager.get_observed_actions()
 
         # 2. Physics loop (decimation)
         for _ in range(self.cfg.decimation):
@@ -304,6 +306,9 @@ class ManagerBasedRlEnv(gym.Env):
         prev_action[env_ids] = 0.0
         self._action = jnp.array(action)
         self._prev_action = jnp.array(prev_action)
+
+        # Reset action term internal state (e.g. JointPosDeltaAction targets)
+        self._action_manager.reset(env_ids)
 
         # Fire reset events (writes to mjData, not JIT)
         self._event_manager.apply_reset(env_ids)
