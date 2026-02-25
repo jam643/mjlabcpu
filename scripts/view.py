@@ -8,6 +8,9 @@ Interactive viewer (macOS requires mjpython):
     mjpython scripts/view.py cartpole --checkpoint checkpoints/cartpole.pkl
     mjpython scripts/view.py cartpole --checkpoint checkpoints/cartpole.pkl --episodes 10
 
+    # Manual control via viewer actuator sliders + live reward plots
+    mjpython scripts/view.py panda_push --manual --plot
+
 Headless RGB video (works with regular python):
     uv run python scripts/view.py cartpole --rgb --steps 500
     uv run python scripts/view.py panda_push --rgb --out panda.mp4
@@ -26,7 +29,7 @@ from __future__ import annotations
 import argparse
 import pathlib
 import time
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 
@@ -169,6 +172,100 @@ def run_human(
     print(f"Viewer closed after {step} steps.")
 
 
+def run_human_manual(
+    env_name: str,
+    envs_dir: pathlib.Path,
+    plot: bool = False,
+    max_episodes: int | None = None,
+) -> None:
+    """Open a passive MuJoCo viewer with actuator sliders for manual control.
+
+    The RL action pipeline is bypassed entirely — viewer sliders write directly
+    to ``mjData.ctrl`` and physics uses those values.  Rewards and observations
+    are still computed each step and (if ``--plot``) streamed to rerun so you
+    can see exactly what the reward functions see as you manually move the arm.
+    """
+    from mjlabcpu.utils import EnvMonitor
+
+    mod = load_env_module(env_name, envs_dir)
+    env = mod.make_env(num_envs=1, render_mode="human")
+    env.reset()
+    env.render()  # open viewer window
+
+    # Placeholder action array for monitor logging (sliders bypass RL actions)
+    action_zeros = np.zeros((env.num_envs, env.action_space.shape[0]), dtype=np.float32)
+    monitor = EnvMonitor(env) if plot else None
+    target_dt = env.dt
+
+    print(
+        f"MANUAL CONTROL — use the viewer actuator sliders to drive the robot.\n"
+        f"Env: {env_name}  |  obs={env.observation_space.shape[0]}"
+        f"  act={env.action_space.shape[0]}"
+        f"  |  step_dt={target_dt * 1000:.1f} ms  |  close viewer to quit"
+    )
+    if max_episodes:
+        print(f"Will stop after {max_episodes} episode(s).")
+
+    step = 0
+    episode = 0
+    ep_acc = 0.0
+
+    while env.is_viewer_running():
+        t0 = time.perf_counter()
+
+        # --- Physics step without overriding ctrl ---
+        # Viewer sliders write to data[0].ctrl directly; we step physics
+        # without calling apply_actions() so those values are preserved.
+        env._episode_length = env._episode_length + 1
+        for _ in range(env.cfg.decimation):
+            env._sim.step()
+        env._command_manager.step(target_dt)
+        env.render()
+
+        # --- Compute state / rewards / terminations (same as normal step) ---
+        state = env._make_dummy_state()
+        total_reward, reward_terms = env._reward_manager.compute(state)
+        done, truncated, term_terms = env._termination_manager.compute(state)
+        terminated = done & ~truncated
+
+        rewards_np = np.array(total_reward)
+        terminated_np = np.array(terminated)
+        truncated_np = np.array(truncated)
+        info = {
+            "reward_terms": {k: np.array(v) for k, v in reward_terms.items()},
+            "termination_terms": {k: np.array(v) for k, v in term_terms.items()},
+        }
+
+        ep_acc += float(rewards_np[0])
+
+        if monitor:
+            obs_terms = env._obs_manager.compute_terms(state)
+            monitor.log_step(obs_terms, rewards_np, terminated_np, truncated_np, info, action_zeros)
+
+        # --- Episode reset ---
+        done_ids = np.where(np.array(done))[0].tolist()
+        if done_ids:
+            episode += 1
+            print(f"  episode {episode:3d}  reward={ep_acc:+.1f}")
+            ep_acc = 0.0
+            env._reset_envs(done_ids)
+            if max_episodes and episode >= max_episodes:
+                break
+
+        step += 1
+
+        # Throttle to real-time
+        elapsed = time.perf_counter() - t0
+        sleep_for = target_dt - elapsed
+        if sleep_for > 0:
+            time.sleep(sleep_for)
+
+    env.close()
+    if episode:
+        print(f"\n{episode} episode(s) completed.")
+    print(f"Viewer closed after {step} steps.")
+
+
 def run_rgb(
     env_name: str,
     envs_dir: pathlib.Path,
@@ -200,12 +297,14 @@ def run_rgb(
         except ImportError as exc:
             print(f"PhotoRenderer import failed: {exc}")
             import sys
+
             sys.exit(1)
         print("[PhotoRenderer] Initializing Blender Cycles scene (one-time cost)…")
         try:
             photo_renderer = PhotoRenderer(env._sim.model, width=640, height=480)
         except FileNotFoundError:
             import sys
+
             print(
                 "Blender not found. Install it first:\n"
                 "  brew install --cask blender\n"
@@ -347,6 +446,16 @@ def main() -> None:
 
     # Extras
     parser.add_argument(
+        "--manual",
+        action="store_true",
+        help=(
+            "Manual control mode: bypass the RL policy entirely and use the "
+            "viewer's built-in actuator sliders to drive the robot. "
+            "Rewards are still computed and streamed to rerun (combine with --plot). "
+            "Requires interactive viewer; incompatible with --rgb."
+        ),
+    )
+    parser.add_argument(
         "--plot",
         action="store_true",
         help="Open rerun live-plot dashboard.",
@@ -364,6 +473,8 @@ def main() -> None:
         raise SystemExit(f"Checkpoint not found: {args.checkpoint}")
 
     if args.rgb:
+        if args.manual:
+            print("Note: --manual requires interactive viewer; ignoring --manual in --rgb mode.")
         out = args.out or f"{args.env}.mp4"
         run_rgb(
             args.env,
@@ -375,6 +486,15 @@ def main() -> None:
             plot=args.plot,
             max_episodes=args.episodes,
             photo=args.photo,
+        )
+    elif args.manual:
+        if args.photo:
+            print("Note: --photo requires --rgb. Ignoring --photo flag.")
+        run_human_manual(
+            args.env,
+            args.envs_dir,
+            plot=args.plot,
+            max_episodes=args.episodes,
         )
     else:
         if args.photo:
