@@ -92,18 +92,32 @@ def reset_joints_uniform(
     entity_name: str,
     position_range: tuple[float, float] = (-0.1, 0.1),
     velocity_range: tuple[float, float] = (-0.1, 0.1),
+    nominal_joint_pos: list[float] | None = None,
 ) -> None:
-    """Reset joint positions and velocities with uniform noise around defaults.
+    """Reset joint positions and velocities with uniform noise around a nominal pose.
 
     Args:
-        position_range: (min, max) uniform noise added to default joint positions.
-        velocity_range: (min, max) uniform noise for initial joint velocities.
+        position_range:    (min, max) uniform noise added to the nominal joint positions.
+        velocity_range:    (min, max) uniform noise for initial joint velocities.
+        nominal_joint_pos: Optional list of nominal joint positions (one per DOF of the
+                           entity) to use as the centre of the noise distribution.
+                           Must have the same length as the entity's qpos addresses.
+                           Defaults to the model's keyframe/default qpos when ``None``.
     """
     entity = env.scene[entity_name]
     model = env.sim.model
     qpos_addrs = np.array(entity.qpos_addrs)
     qvel_addrs = np.array(entity.qvel_addrs)
-    default_qpos = np.array(entity.default_qpos)
+
+    if nominal_joint_pos is not None:
+        centre_qpos = np.array(nominal_joint_pos, dtype=float)
+        if centre_qpos.shape != (len(qpos_addrs),):
+            raise ValueError(
+                f"reset_joints_uniform: nominal_joint_pos has length {len(nominal_joint_pos)}"
+                f" but entity '{entity_name}' has {len(qpos_addrs)} qpos DOFs."
+            )
+    else:
+        centre_qpos = np.array(entity.default_qpos)
 
     for i in env_ids:
         data = env.sim.data[i]
@@ -111,6 +125,6 @@ def reset_joints_uniform(
         lo_v, hi_v = velocity_range
         noise_pos = np.random.uniform(lo_p, hi_p, len(qpos_addrs))
         noise_vel = np.random.uniform(lo_v, hi_v, len(qvel_addrs))
-        data.qpos[qpos_addrs] = default_qpos + noise_pos
+        data.qpos[qpos_addrs] = centre_qpos + noise_pos
         data.qvel[qvel_addrs] = noise_vel
         mujoco.mj_forward(model, data)
