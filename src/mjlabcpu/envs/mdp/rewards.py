@@ -177,11 +177,13 @@ def eef_to_object_exp(
 ) -> jnp.ndarray:
     """Exponential reward for EEF approaching object: exp(-dist/sigma). Shape: (num_envs,).
 
+    Uses 3-D distance so the agent is rewarded for descending to the object's
+    height, not just aligning in XY while hovering above it.
     Bounded in (0, 1] — stronger gradient near the object than the L2 variant.
     """
-    eef_xy = state.xpos[:, eef_entity_cfg.body_ids[0], :2]
-    obj_xy = state.xpos[:, object_entity_cfg.root_body_id, :2]
-    dist = jnp.sqrt(jnp.sum((eef_xy - obj_xy) ** 2, axis=-1) + 1e-6)
+    eef_pos = state.xpos[:, eef_entity_cfg.body_ids[0], :3]
+    obj_pos = state.xpos[:, object_entity_cfg.root_body_id, :3]
+    dist = jnp.sqrt(jnp.sum((eef_pos - obj_pos) ** 2, axis=-1) + 1e-6)
     return jnp.exp(-dist / sigma)
 
 
