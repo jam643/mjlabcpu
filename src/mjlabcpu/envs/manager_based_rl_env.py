@@ -156,9 +156,13 @@ class ManagerBasedRlEnv(gym.Env):
         # Reset physics
         self._sim.reset_all()
         self._episode_length = jnp.zeros(self.num_envs, dtype=jnp.int32)
-        action_dim = self._action_manager.action_dim
-        self._action = jnp.zeros((self.num_envs, action_dim))
-        self._prev_action = jnp.zeros((self.num_envs, action_dim))
+
+        # Reset action manager internal state (e.g. JointPosDeltaAction targets)
+        # and seed self._action from the post-reset targets so last_action in
+        # the first observation matches the actual position command.
+        self._action_manager.reset(all_ids)
+        self._action = self._action_manager.get_observed_actions()
+        self._prev_action = self._action
 
         # Fire reset events
         self._event_manager.apply_reset(all_ids)

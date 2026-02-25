@@ -60,10 +60,13 @@ class ActionTerm(ABC):
         """Action value stored in ``SimState.action`` and returned by the
         ``last_action`` observation.
 
-        Defaults to raw actions.  Override in subclasses that maintain
-        internal state (e.g. :class:`JointPosDeltaAction`) to return the
-        absolute command instead of the raw network output.
+        Safe to call before the first ``process_actions()`` (returns zeros).
+        Override in subclasses that maintain internal state
+        (e.g. :class:`JointPosDeltaAction`) to return the absolute command
+        instead of the raw network output.
         """
+        if self._raw_actions is None:
+            return jnp.zeros((self._env.num_envs, self.action_dim))
         return self.raw_actions
 
     def process_actions(self, actions: jnp.ndarray) -> None:
