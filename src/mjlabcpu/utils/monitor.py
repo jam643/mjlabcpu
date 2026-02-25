@@ -46,6 +46,7 @@ class EnvMonitor:
         self._step_in_ep = 0
         self._total_step = 0
         self._episode = 0
+        self._ep_return = 0.0
         self._rr = rr
 
     def log_step(
@@ -73,8 +74,11 @@ class EnvMonitor:
         rr.set_time("step_in_episode", sequence=self._step_in_ep)
         rr.set_time("total_step", sequence=self._total_step)
 
+        step_reward = float(rewards[i])
+        self._ep_return += step_reward
+
         # --- Total reward ---
-        rr.log("reward/total", rr.Scalars(float(rewards[i])))
+        rr.log("reward/total", rr.Scalars(step_reward))
 
         # --- Per-term rewards ---
         for name, vals in info.get("reward_terms", {}).items():
@@ -108,12 +112,26 @@ class EnvMonitor:
         # --- Episode boundary ---
         done = bool(terminated[i]) or bool(truncated[i])
         if done:
+            # --- Cumulative episode return (on the episode timeline) ---
+            rr.set_time("episode", sequence=self._episode)
+            rr.log("episode/return", rr.Scalars(self._ep_return))
+
+            # --- Clear per-step plots so the new episode starts fresh ---
+            # Log clears at total_step N (one past the last data point) so they
+            # appear right after the episode's final step in the scrubber.
+            rr.set_time("total_step", sequence=self._total_step)
+            rr.set_time("step_in_episode", sequence=0)
+            for path in ["reward", "obs", "action", "termination"]:
+                rr.log(path, rr.Clear(recursive=True))
+
             reason = "truncated" if truncated[i] else "terminated"
             rr.log(
                 "episode/reset",
                 rr.TextLog(
                     f"Episode {self._episode} ended ({reason}) after {self._step_in_ep} steps"
+                    f"  return={self._ep_return:+.2f}"
                 ),
             )
             self._step_in_ep = 0
             self._episode += 1
+            self._ep_return = 0.0
