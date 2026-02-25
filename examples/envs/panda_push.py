@@ -48,9 +48,9 @@ from mjlabcpu.sim import SimulationCfg  # noqa: E402
 from mjlabcpu.training import PPOCfg  # noqa: E402
 
 DT = 0.002
-DECIMATION = 4
+DECIMATION = 50
 EPISODE_LENGTH_S = 8.0
-MAX_EPISODE_STEPS = int(EPISODE_LENGTH_S / (DT * DECIMATION))  # 1000
+MAX_EPISODE_STEPS = int(EPISODE_LENGTH_S / (DT * DECIMATION))  # 80
 
 PANDA_CFG = SceneEntityCfg(name="panda")
 EEF_CFG = SceneEntityCfg(name="panda", body_names=["link7"])
@@ -92,10 +92,7 @@ def make_env(num_envs: int = 1, render_mode: str | None = None) -> ManagerBasedR
                         func=obs_mdp.joint_pos_rel,
                         params={"entity_cfg": PANDA_CFG},
                     ),
-                    "joint_vel": ObservationTermCfg(
-                        func=obs_mdp.joint_vel_rel,
-                        params={"entity_cfg": PANDA_CFG},
-                    ),
+                    "last_action": ObservationTermCfg(func=obs_mdp.last_action),
                     "eef_pos_xy": ObservationTermCfg(
                         func=obs_mdp.body_pos_w_xy,
                         params={"entity_cfg": EEF_CFG},
@@ -113,13 +110,13 @@ def make_env(num_envs: int = 1, render_mode: str | None = None) -> ManagerBasedR
         },
         rewards={
             "push_progress": RewardTermCfg(
-                func=rew_mdp.object_to_goal,
-                params={"object_entity_cfg": PUCK_CFG, "command_name": "goal_pos"},
+                func=rew_mdp.object_to_goal_exp,
+                params={"object_entity_cfg": PUCK_CFG, "command_name": "goal_pos", "sigma": 0.1},
                 weight=5.0,
             ),
             "approach": RewardTermCfg(
-                func=rew_mdp.eef_to_object,
-                params={"eef_entity_cfg": EEF_CFG, "object_entity_cfg": PUCK_CFG},
+                func=rew_mdp.eef_to_object_exp,
+                params={"eef_entity_cfg": EEF_CFG, "object_entity_cfg": PUCK_CFG, "sigma": 0.1},
                 weight=1.0,
             ),
             "action_penalty": RewardTermCfg(func=rew_mdp.action_rate_l2, weight=-0.01),

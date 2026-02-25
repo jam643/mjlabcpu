@@ -59,7 +59,7 @@ def _make_env(num_envs: int = 2):
         ),
         sim=SimulationCfg(dt=0.002),
         episode_length_s=8.0,
-        decimation=4,
+        decimation=50,
         observations={
             "policy": ObservationGroupCfg(
                 terms={
@@ -67,10 +67,7 @@ def _make_env(num_envs: int = 2):
                         func=obs_mdp.joint_pos_rel,
                         params={"entity_cfg": panda_cfg},
                     ),
-                    "joint_vel": ObservationTermCfg(
-                        func=obs_mdp.joint_vel_rel,
-                        params={"entity_cfg": panda_cfg},
-                    ),
+                    "last_action": ObservationTermCfg(func=obs_mdp.last_action),
                     "eef_pos_xy": ObservationTermCfg(
                         func=obs_mdp.body_pos_w_xy,
                         params={"entity_cfg": eef_cfg},
@@ -88,13 +85,13 @@ def _make_env(num_envs: int = 2):
         },
         rewards={
             "push_progress": RewardTermCfg(
-                func=rew_mdp.object_to_goal,
-                params={"object_entity_cfg": puck_cfg, "command_name": "goal_pos"},
+                func=rew_mdp.object_to_goal_exp,
+                params={"object_entity_cfg": puck_cfg, "command_name": "goal_pos", "sigma": 0.1},
                 weight=5.0,
             ),
             "approach": RewardTermCfg(
-                func=rew_mdp.eef_to_object,
-                params={"eef_entity_cfg": eef_cfg, "object_entity_cfg": puck_cfg},
+                func=rew_mdp.eef_to_object_exp,
+                params={"eef_entity_cfg": eef_cfg, "object_entity_cfg": puck_cfg, "sigma": 0.1},
                 weight=1.0,
             ),
             "action_penalty": RewardTermCfg(func=rew_mdp.action_rate_l2, weight=-0.01),
@@ -102,7 +99,7 @@ def _make_env(num_envs: int = 2):
         terminations={
             "time_out": TerminationTermCfg(
                 func=term_mdp.time_out,
-                params={"max_episode_length": 1000},
+                params={"max_episode_length": 80},
                 time_out=True,
             ),
             "puck_out": TerminationTermCfg(
@@ -158,7 +155,7 @@ class TestPandaPushEnv:
     def test_reset_shape(self):
         env = _make_env(num_envs=2)
         obs, info = env.reset()
-        # 7 joint_pos + 7 joint_vel + 2 eef_xy + 3 puck_pos + 3 goal_pos = 22
+        # 7 joint_pos + 7 last_action + 2 eef_xy + 3 puck_pos + 3 goal_pos = 22
         assert obs.shape == (2, 22), f"Expected (2, 22), got {obs.shape}"
         assert isinstance(info, dict)
         env.close()
@@ -170,7 +167,7 @@ class TestPandaPushEnv:
         # Panda has 7 DOF (nohand)
         actions = np.zeros((num_envs, 7), dtype=np.float32)
         obs, rewards, terminated, truncated, info = env.step(actions)
-        assert obs.shape == (num_envs, 22)
+        assert obs.shape == (num_envs, 22)  # 7 joint_pos + 7 last_action + 2+3+3
         assert rewards.shape == (num_envs,)
         assert terminated.shape == (num_envs,)
         assert truncated.shape == (num_envs,)

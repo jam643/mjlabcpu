@@ -153,6 +153,38 @@ def eef_to_object(
     return -jnp.sqrt(jnp.sum((eef_xy - obj_xy) ** 2, axis=-1) + 1e-6)
 
 
+def object_to_goal_exp(
+    state: SimState,
+    object_entity_cfg: ResolvedEntityCfg,
+    command_name: str,
+    sigma: float = 0.1,
+) -> jnp.ndarray:
+    """Exponential reward for pushing object to goal: exp(-dist/sigma). Shape: (num_envs,).
+
+    Bounded in (0, 1] — stronger gradient near the goal than the L2 variant.
+    """
+    obj_xy = state.xpos[:, object_entity_cfg.root_body_id, :2]
+    goal_xy = state.commands[command_name][:, :2]
+    dist = jnp.sqrt(jnp.sum((obj_xy - goal_xy) ** 2, axis=-1) + 1e-6)
+    return jnp.exp(-dist / sigma)
+
+
+def eef_to_object_exp(
+    state: SimState,
+    eef_entity_cfg: ResolvedEntityCfg,
+    object_entity_cfg: ResolvedEntityCfg,
+    sigma: float = 0.1,
+) -> jnp.ndarray:
+    """Exponential reward for EEF approaching object: exp(-dist/sigma). Shape: (num_envs,).
+
+    Bounded in (0, 1] — stronger gradient near the object than the L2 variant.
+    """
+    eef_xy = state.xpos[:, eef_entity_cfg.body_ids[0], :2]
+    obj_xy = state.xpos[:, object_entity_cfg.root_body_id, :2]
+    dist = jnp.sqrt(jnp.sum((eef_xy - obj_xy) ** 2, axis=-1) + 1e-6)
+    return jnp.exp(-dist / sigma)
+
+
 def cartpole_upright(state: SimState, entity_cfg: ResolvedEntityCfg) -> jnp.ndarray:
     """Reward for cartpole pole being upright. Uses cos(pole_angle). Shape: (num_envs,)."""
     # For cartpole: qpos = [slider, hinge_angle]
