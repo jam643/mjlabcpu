@@ -49,6 +49,23 @@ def action_rate_l2(state: SimState) -> jnp.ndarray:
     return -jnp.sum(diff**2, axis=-1)
 
 
+def action_l2_exp(state: SimState, sigma: float = 1.0) -> jnp.ndarray:
+    """Exponential reward for small action magnitude: exp(-||action|| / sigma).
+
+    Bounded in (0, 1] — reward is 1 when the action is zero and decays
+    toward 0 for larger magnitudes.  Unlike ``action_rate_l2`` this is a
+    function of only the current ``state.action`` with no dependency on
+    ``prev_action``, making it natural for delta-action policies where
+    ``state.action`` holds the accumulated position target.
+
+    Choose ``sigma`` to match the typical operating magnitude of
+    ``state.action``.  For a 7-DOF arm near a nominal pose of magnitude
+    ~3 rad, ``sigma=4`` gives ~0.5 reward at the nominal pose.
+    """
+    magnitude = jnp.sqrt(jnp.sum(state.action**2, axis=-1) + 1e-6)
+    return jnp.exp(-magnitude / sigma)
+
+
 def flat_orientation_l2(state: SimState, entity_cfg: ResolvedEntityCfg) -> jnp.ndarray:
     """Negative L2 norm of projected gravity deviation from [0,0,-1]. Shape: (num_envs,).
 

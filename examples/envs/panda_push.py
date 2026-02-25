@@ -119,11 +119,10 @@ def make_env(num_envs: int = 1, render_mode: str | None = None) -> ManagerBasedR
                 params={"eef_entity_cfg": EEF_CFG, "object_entity_cfg": PUCK_CFG, "sigma": 0.1},
                 weight=1.0,
             ),
-            "action_penalty": RewardTermCfg(func=rew_mdp.action_rate_l2, weight=-0.01),
-            "vel_penalty": RewardTermCfg(
-                func=rew_mdp.joint_vel_l2,
-                params={"entity_cfg": PANDA_CFG},
-                weight=-0.001,
+            "action_penalty": RewardTermCfg(
+                func=rew_mdp.action_l2_exp,
+                params={"sigma": 4.0},
+                weight=0.1,
             ),
         },
         terminations={
