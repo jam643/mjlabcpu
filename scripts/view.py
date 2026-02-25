@@ -38,6 +38,23 @@ _PROJECT_ROOT = pathlib.Path(__file__).parent.parent
 _DEFAULT_ENVS_DIR = _PROJECT_ROOT / "examples" / "envs"
 
 
+def _seed_ctrl_from_qpos(model, data) -> None:
+    """Set each joint-position actuator's ctrl to the current joint angle.
+
+    Prevents position controllers from fighting the reset pose when the viewer
+    first opens or after an episode reset — slider values are initialised to
+    the post-reset qpos so the controller has zero error from the start.
+    Only acts on actuators with joint transmission (trntype == 0); other
+    actuator types (velocity, torque) are left unchanged.
+    """
+    import mujoco
+
+    for i in range(model.nu):
+        if model.actuator_trntype[i] == mujoco.mjtTrn.mjTRN_JOINT:
+            jnt_id = model.actuator_trnid[i, 0]
+            data.ctrl[i] = data.qpos[model.jnt_qposadr[jnt_id]]
+
+
 def load_env_module(name: str, envs_dir: pathlib.Path):
     import importlib.util
 
@@ -190,6 +207,7 @@ def run_human_manual(
     mod = load_env_module(env_name, envs_dir)
     env = mod.make_env(num_envs=1, render_mode="human")
     env.reset()
+    _seed_ctrl_from_qpos(env._sim.model, env._sim.data[0])
     env.render()  # open viewer window
 
     # Placeholder action array for monitor logging (sliders bypass RL actions)
@@ -249,6 +267,10 @@ def run_human_manual(
             print(f"  episode {episode:3d}  reward={ep_acc:+.1f}")
             ep_acc = 0.0
             env._reset_envs(done_ids)
+            # Re-seed ctrl so sliders and position controller both start at
+            # the new nominal pose instead of fighting toward zero.
+            for i in done_ids:
+                _seed_ctrl_from_qpos(env._sim.model, env._sim.data[i])
             if max_episodes and episode >= max_episodes:
                 break
 
