@@ -1,9 +1,17 @@
 """Real-time episode monitor using rerun-sdk.
 
 Logs reward terms, observation terms, actions, and termination signals
-to a live rerun dashboard. Uses ``step_in_episode`` as the primary timeline
-so the plot naturally shows only the current episode; old episodes remain
-accessible via the time scrubber.
+to a live rerun dashboard.
+
+Timeline design
+---------------
+* ``total_step`` — monotonically increasing, used for all per-step scalars.
+  At episode boundaries a ``nan`` is inserted so the line plot shows a
+  visual gap/break between episodes (the standard rerun idiom; ``rr.Clear``
+  only punches a hole at one point and cannot retroactively remove earlier
+  data from range queries).
+* ``episode`` — increments once per episode, used only for
+  ``episode/return`` so you get a clean learning-curve plot.
 
 Usage::
 
@@ -43,11 +51,37 @@ class EnvMonitor:
         rr.init(app_id, spawn=True)
         self._env = env
         self._env_idx = env_idx
-        self._step_in_ep = 0
         self._total_step = 0
         self._episode = 0
         self._ep_return = 0.0
+        self._scalar_paths: list[str] = []  # ordered list for gap logging
         self._rr = rr
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _scalar(self, path: str, value: float) -> None:
+        """Log a scalar on the ``total_step`` timeline and track the path."""
+        self._rr.log(path, self._rr.Scalars(value))
+        if path not in self._scalar_paths:
+            self._scalar_paths.append(path)
+
+    def _log_gap(self) -> None:
+        """Insert a nan at the current ``total_step`` for all tracked scalar paths.
+
+        This creates a visual line-break between episodes without removing
+        historical data (which rerun does not support after the fact).
+        """
+        rr = self._rr
+        rr.set_time("total_step", sequence=self._total_step)
+        for path in self._scalar_paths:
+            rr.log(path, rr.Scalars(float("nan")))
+        self._total_step += 1
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     def log_step(
         self,
@@ -71,27 +105,26 @@ class EnvMonitor:
         rr = self._rr
         i = self._env_idx
 
-        rr.set_time("step_in_episode", sequence=self._step_in_ep)
         rr.set_time("total_step", sequence=self._total_step)
 
         step_reward = float(rewards[i])
         self._ep_return += step_reward
 
         # --- Total reward ---
-        rr.log("reward/total", rr.Scalars(step_reward))
+        self._scalar("reward/total", step_reward)
 
         # --- Per-term rewards ---
         for name, vals in info.get("reward_terms", {}).items():
-            rr.log(f"reward/{name}", rr.Scalars(float(vals[i])))
+            self._scalar(f"reward/{name}", float(vals[i]))
 
         # --- Observations (per-term) ---
         for name, arr in obs_terms.items():
             a = np.array(arr[i])
             if a.ndim == 0 or a.size == 1:
-                rr.log(f"obs/{name}", rr.Scalars(float(a.flat[0])))
+                self._scalar(f"obs/{name}", float(a.flat[0]))
             else:
                 for d, v in enumerate(a.flat):
-                    rr.log(f"obs/{name}/{d}", rr.Scalars(float(v)))
+                    self._scalar(f"obs/{name}/{d}", float(v))
 
         # --- Actions (per-dim, grouped by action term name) ---
         act = np.array(action[i])
@@ -99,39 +132,32 @@ class EnvMonitor:
         for term_name, term in self._env._action_manager._terms.items():
             dim = term.action_dim
             for d in range(dim):
-                rr.log(f"action/{term_name}/{d}", rr.Scalars(float(act[offset + d])))
+                self._scalar(f"action/{term_name}/{d}", float(act[offset + d]))
             offset += dim
 
         # --- Termination signals ---
         for name, vals in info.get("termination_terms", {}).items():
-            rr.log(f"termination/{name}", rr.Scalars(float(bool(vals[i]))))
+            self._scalar(f"termination/{name}", float(bool(vals[i])))
 
-        self._step_in_ep += 1
         self._total_step += 1
 
         # --- Episode boundary ---
         done = bool(terminated[i]) or bool(truncated[i])
         if done:
-            # --- Cumulative episode return (on the episode timeline) ---
+            # Cumulative episode return on its own timeline
             rr.set_time("episode", sequence=self._episode)
             rr.log("episode/return", rr.Scalars(self._ep_return))
-
-            # --- Clear per-step plots so the new episode starts fresh ---
-            # Log clears at total_step N (one past the last data point) so they
-            # appear right after the episode's final step in the scrubber.
-            rr.set_time("total_step", sequence=self._total_step)
-            rr.set_time("step_in_episode", sequence=0)
-            for path in ["reward", "obs", "action", "termination"]:
-                rr.log(path, rr.Clear(recursive=True))
 
             reason = "truncated" if truncated[i] else "terminated"
             rr.log(
                 "episode/reset",
                 rr.TextLog(
-                    f"Episode {self._episode} ended ({reason}) after {self._step_in_ep} steps"
-                    f"  return={self._ep_return:+.2f}"
+                    f"Episode {self._episode} ended ({reason})  return={self._ep_return:+.2f}"
                 ),
             )
-            self._step_in_ep = 0
+
+            # Insert nan gap so line plots show a break between episodes
+            self._log_gap()
+
             self._episode += 1
             self._ep_return = 0.0
